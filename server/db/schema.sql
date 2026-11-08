@@ -117,4 +117,45 @@ CREATE INDEX IF NOT EXISTS bookings_barber_date_idx
   ON bookings (barber_id, booking_date)
   WHERE status = 'activa';
 
+-- ---------------------------------------------------------------------------
+-- users
+--
+-- Dos roles que se comportan distinto de verdad:
+--   admin    gestiona toda la agenda de la barberia
+--   barbero  entra al mismo panel, pero solo ve y cancela SUS citas
+--
+-- El CHECK amarra esa regla en la base y no solo en el codigo: un barbero
+-- siempre esta ligado a su ficha, un admin nunca. Si alguien inserta mal una
+-- fila, Postgres la rechaza. Misma filosofia que bookings_slot_unico.
+--
+-- Nunca se guarda la contraseña, solo su hash bcrypt.
+-- ---------------------------------------------------------------------------
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'user_role') THEN
+    CREATE TYPE user_role AS ENUM ('admin', 'barbero');
+  END IF;
+END
+$$;
+
+CREATE TABLE IF NOT EXISTS users (
+  id            UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+  -- Se guarda siempre en minusculas: el login no distingue mayusculas.
+  username      TEXT        NOT NULL UNIQUE,
+  password_hash TEXT        NOT NULL,
+  role          user_role   NOT NULL,
+  barber_id     TEXT        REFERENCES barbers(id) ON DELETE CASCADE,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+
+  CONSTRAINT rol_coherente CHECK (
+    (role = 'barbero' AND barber_id IS NOT NULL) OR
+    (role = 'admin'   AND barber_id IS NULL)
+  )
+);
+
+-- Un barbero no puede tener dos cuentas.
+CREATE UNIQUE INDEX IF NOT EXISTS users_barbero_unico
+  ON users (barber_id)
+  WHERE barber_id IS NOT NULL;
+
 COMMIT;

@@ -1,8 +1,13 @@
-import { ConflictError, NotFoundError, UnprocessableError } from '../errors/app-error.js';
+import {
+  ConflictError,
+  ForbiddenError,
+  NotFoundError,
+  UnprocessableError,
+} from '../errors/app-error.js';
 import { ERROR_CODES } from '../errors/codes.js';
 import * as bookingsRepository from '../repositories/bookings.repository.js';
 import * as schedulesRepository from '../repositories/schedules.repository.js';
-import type { Booking, CreateBookingInput } from '../types/api.js';
+import type { AuthUser, Booking, CreateBookingInput } from '../types/api.js';
 import { currentMinutes, today } from '../utils/clock.js';
 import { isSlotBoundary, toMinutes, weekdayOf } from '../utils/time.js';
 
@@ -76,6 +81,52 @@ export async function create(input: CreateBookingInput): Promise<Booking> {
   return result.booking;
 }
 
+/**
+ * Un barbero solo puede tocar sus propias citas; un admin, todas.
+ *
+ * La comprobación vive en el servicio y no en el middleware a propósito: el
+ * middleware sabe qué ROL tienes, pero para saber si esta cita concreta es
+ * tuya hay que mirar el dato. Eso es una regla de negocio.
+ */
+function assertPuedeGestionar(booking: Booking, user: AuthUser): void {
+  if (user.role === 'admin') {
+    return;
+  }
+  if (user.barberId === null || booking.barberId !== user.barberId) {
+    throw new ForbiddenError(
+      ERROR_CODES.FORBIDDEN,
+      'Solo puedes gestionar las citas de tu propia agenda.',
+    );
+  }
+}
+
+/**
+ * Agenda del panel.
+ *
+ * Al barbero se le IGNORA cualquier filtro de barbero que mande y se le fuerza
+ * el suyo. Si se respetara el parámetro, bastaría con cambiarlo en la petición
+ * para leer la agenda de otro: el filtro de la interfaz no es una medida de
+ * seguridad, la del servidor sí.
+ */
+export async function getAgenda(
+  user: AuthUser,
+  filtros: { date?: string | undefined; barberId?: string | undefined },
+): Promise<Booking[]> {
+  const date = filtros.date ?? null;
+
+  if (user.role === 'barbero') {
+    if (user.barberId === null) {
+      throw new ForbiddenError(
+        ERROR_CODES.FORBIDDEN,
+        'Tu cuenta de barbero no está asociada a ninguna ficha.',
+      );
+    }
+    return bookingsRepository.findAgenda({ date, barberId: user.barberId });
+  }
+
+  return bookingsRepository.findAgenda({ date, barberId: filtros.barberId ?? null });
+}
+
 export async function getById(id: string): Promise<Booking> {
   const booking = await bookingsRepository.findById(id);
 
@@ -94,8 +145,9 @@ export async function getById(id: string): Promise<Booking> {
  * Se consulta primero para poder distinguir dos situaciones que el UPDATE
  * confunde: la cita no existe (404) o existe pero ya estaba cancelada (409).
  */
-export async function cancel(id: string): Promise<void> {
-  await getById(id);
+export async function cancel(id: string, user: AuthUser): Promise<void> {
+  const booking = await getById(id);
+  assertPuedeGestionar(booking, user);
 
   const cancelled = await bookingsRepository.cancel(id);
 

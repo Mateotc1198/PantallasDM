@@ -1,7 +1,8 @@
 import request from 'supertest';
-import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import app from '../../src/app.js';
+import { ADMIN, bearer, crearUsuariosDePrueba, tokenDe } from '../helpers/auth.js';
 import { closeDatabase, resetBookings } from '../helpers/db.js';
 import { futureOpenDate, futureSunday, pastDate } from '../helpers/dates.js';
 
@@ -25,6 +26,14 @@ function validPayload(overrides: Partial<BookingPayload> = {}): BookingPayload {
     ...overrides,
   };
 }
+
+/** Cancelar dejó de ser público: estos tests necesitan una sesión de admin. */
+let tokenAdmin: string;
+
+beforeAll(async () => {
+  await crearUsuariosDePrueba();
+  tokenAdmin = await tokenDe(ADMIN);
+});
 
 beforeEach(resetBookings);
 afterAll(closeDatabase);
@@ -169,7 +178,7 @@ describe('DELETE /api/v1/bookings/:id', () => {
   it('devuelve 204 sin cuerpo', async () => {
     const created = await request(app).post('/api/v1/bookings').send(validPayload());
 
-    const response = await request(app).delete(`/api/v1/bookings/${created.body.id}`);
+    const response = await request(app).delete(`/api/v1/bookings/${created.body.id}`).set('Authorization', bearer(tokenAdmin));
 
     expect(response.status).toBe(204);
     expect(response.body).toEqual({});
@@ -177,7 +186,7 @@ describe('DELETE /api/v1/bookings/:id', () => {
 
   it('deja la cita en estado cancelada', async () => {
     const created = await request(app).post('/api/v1/bookings').send(validPayload());
-    await request(app).delete(`/api/v1/bookings/${created.body.id}`);
+    await request(app).delete(`/api/v1/bookings/${created.body.id}`).set('Authorization', bearer(tokenAdmin));
 
     const response = await request(app).get(`/api/v1/bookings/${created.body.id}`);
 
@@ -186,16 +195,16 @@ describe('DELETE /api/v1/bookings/:id', () => {
 
   it('devuelve 409 al cancelar dos veces', async () => {
     const created = await request(app).post('/api/v1/bookings').send(validPayload());
-    await request(app).delete(`/api/v1/bookings/${created.body.id}`);
+    await request(app).delete(`/api/v1/bookings/${created.body.id}`).set('Authorization', bearer(tokenAdmin));
 
-    const response = await request(app).delete(`/api/v1/bookings/${created.body.id}`);
+    const response = await request(app).delete(`/api/v1/bookings/${created.body.id}`).set('Authorization', bearer(tokenAdmin));
 
     expect(response.status).toBe(409);
     expect(response.body.error.code).toBe('BOOKING_ALREADY_CANCELLED');
   });
 
   it('devuelve 404 si la cita no existe', async () => {
-    const response = await request(app).delete(`/api/v1/bookings/${UUID_INEXISTENTE}`);
+    const response = await request(app).delete(`/api/v1/bookings/${UUID_INEXISTENTE}`).set('Authorization', bearer(tokenAdmin));
 
     expect(response.status).toBe(404);
     expect(response.body.error.code).toBe('BOOKING_NOT_FOUND');
@@ -204,7 +213,7 @@ describe('DELETE /api/v1/bookings/:id', () => {
   it('libera la franja: el índice único es parcial sobre status activa', async () => {
     const payload = validPayload();
     const created = await request(app).post('/api/v1/bookings').send(payload);
-    await request(app).delete(`/api/v1/bookings/${created.body.id}`);
+    await request(app).delete(`/api/v1/bookings/${created.body.id}`).set('Authorization', bearer(tokenAdmin));
 
     const response = await request(app).post('/api/v1/bookings').send(payload);
 

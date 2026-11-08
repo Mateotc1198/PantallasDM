@@ -14,6 +14,13 @@ const envSchema = z.object({
   DATABASE_URL: z.string().min(1, 'DATABASE_URL es obligatoria'),
   DATABASE_URL_TEST: z.string().min(1).optional(),
   CORS_ORIGINS: z.string().default(''),
+  /**
+   * Secreto de firma de los JWT. Mínimo 32 caracteres: un secreto corto se
+   * rompe por fuerza bruta y cualquiera podría fabricar tokens de admin.
+   */
+  JWT_SECRET: z.string().min(32, 'JWT_SECRET debe tener al menos 32 caracteres'),
+  /** Duración del token en segundos. Por defecto 8 horas. */
+  JWT_EXPIRES_IN_SECONDS: z.coerce.number().int().positive().default(28_800),
   /** Las bases gestionadas exigen TLS; en local no hay. */
   DATABASE_SSL: z.enum(['true', 'false']).default('false'),
 });
@@ -44,6 +51,8 @@ export const env = {
   /** En test apunta a la base aislada: los tests nunca borran datos reales. */
   databaseUrl: isTest && raw.DATABASE_URL_TEST !== undefined ? raw.DATABASE_URL_TEST : raw.DATABASE_URL,
   databaseSsl: raw.DATABASE_SSL === 'true',
+  jwtSecret: raw.JWT_SECRET,
+  jwtExpiresInSeconds: raw.JWT_EXPIRES_IN_SECONDS,
   /** Lista blanca de CORS. Vacía = no se permite ningún origen del navegador. */
   corsOrigins: raw.CORS_ORIGINS.split(',')
     .map((origin) => origin.trim())

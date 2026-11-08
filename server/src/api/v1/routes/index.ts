@@ -1,5 +1,6 @@
 import { Router } from 'express';
 
+import authRoutes from './auth.routes.js';
 import barbersRoutes from './barbers.routes.js';
 import bookingsRoutes from './bookings.routes.js';
 
@@ -13,6 +14,7 @@ import bookingsRoutes from './bookings.routes.js';
  */
 const router = Router();
 
+router.use('/auth', authRoutes);
 router.use('/barbers', barbersRoutes);
 router.use('/bookings', bookingsRoutes);
 

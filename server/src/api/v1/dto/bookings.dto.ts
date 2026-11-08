@@ -19,9 +19,19 @@ export const createBookingSchema = z.object({
     .regex(PHONE_PATTERN, 'debe tener exactamente 10 dígitos, sin espacios ni signos'),
 });
 
+/** Filtros opcionales de GET /bookings. */
+export const agendaQuerySchema = z.object({
+  date: z
+    .string()
+    .refine(isValidISODate, 'formato esperado YYYY-MM-DD y fecha existente')
+    .optional(),
+  barberId: z.string().min(1).max(100).optional(),
+});
+
 export const bookingIdParamsSchema = z.object({
   id: z.uuid('el id de la cita debe ser un UUID'),
 });
 
 export type CreateBookingBody = z.infer<typeof createBookingSchema>;
 export type BookingIdParams = z.infer<typeof bookingIdParamsSchema>;
+export type AgendaQuery = z.infer<typeof agendaQuerySchema>;
