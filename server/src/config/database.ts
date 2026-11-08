@@ -28,8 +28,20 @@ pg.types.setTypeParser(PG_OID.TIME, (value: string) => value);
 /** NUMERIC llega como string para no perder precisión; nuestros AVG caben en un number. */
 pg.types.setTypeParser(PG_OID.NUMERIC, (value: string) => Number(value));
 
+/**
+ * TLS hacia la base.
+ *
+ * rejectUnauthorized en false cifra la conexión pero no verifica la identidad
+ * del servidor: los proveedores gestionados firman con CA propias que Node no
+ * trae. Es el modo que documentan Render y Neon para conexiones externas.
+ * Conectando por la URL interna del proveedor (misma red privada) no hace
+ * falta activarlo.
+ */
+const ssl = env.databaseSsl ? { rejectUnauthorized: false } : undefined;
+
 export const pool = new pg.Pool({
   connectionString: env.databaseUrl,
+  ssl,
   max: 10,
   idleTimeoutMillis: 30_000,
   connectionTimeoutMillis: 5_000,

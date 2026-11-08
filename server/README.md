@@ -28,10 +28,9 @@ Comprobar que responde:
 curl http://localhost:3000/health
 ```
 
-> **`db:setup` reinicia la base.** Hace `DROP TABLE` antes de crear: te deja
-> en un estado limpio y conocido, pero borra las citas que hubieras creado.
-> Es lo correcto en desarrollo; en producción esto se haría con migraciones
-> incrementales, nunca con un `DROP`.
+> **`db:setup` no borra nada.** Crea lo que falte y siembra solo si está vacío,
+> así se puede ejecutar en cada despliegue. Para volver a cero en desarrollo
+> está `npm run db:reset`, que sí borra.
 
 > **Puerto 5434, no 5432.** Los puertos 5432 y 5433 ya están ocupados por otros
 > contenedores de esta máquina. Se cambia con `DB_PORT` en el `.env`.
@@ -137,6 +136,67 @@ el `.env` y crea a mano la base de tests. El resto del flujo es idéntico:
 | `npm ci` → *the operation was rejected by your operating system* | un proceso `node` o `esbuild` sigue vivo bloqueando `node_modules` | cerrar la terminal que corría `npm run dev` o `npm test` y reintentar |
 | Postman devuelve `ECONNREFUSED` | la API no está corriendo | `npm run dev` |
 | Postman da `409` al crear cita | esa franja ya se reservó en una corrida anterior | ejecutar la petición *Cancelar cita*, o `npm run db:setup` para reiniciar |
+
+---
+
+## Despliegue en Render
+
+La infraestructura está declarada en [`render.yaml`](../render.yaml) en la raíz
+del repositorio: base de datos y servicio web en un solo archivo versionado, en
+vez de configuración hecha a mano en un panel que nadie puede reproducir.
+
+### Pasos
+
+1. Subir la rama `Develop` a GitHub con `render.yaml` incluido.
+2. En Render: **New → Blueprint** → conectar el repositorio → rama `Develop`.
+3. Render lee el archivo y propone crear `pantallasdm-db` y `pantallasdm-api`.
+4. Cuando pida **`CORS_ORIGINS`**, dejarlo vacío por ahora (la app móvil no usa
+   CORS; solo hace falta si se abre la app en Expo Web).
+5. **Apply** y esperar el primer build.
+
+El primer despliegue tarda varios minutos: instala dependencias, compila
+TypeScript, aplica el esquema y arranca.
+
+### Comprobar que quedó bien
+
+```bash
+curl https://<tu-servicio>.onrender.com/health
+curl https://<tu-servicio>.onrender.com/api/v1/barbers
+```
+
+El segundo debe devolver los dos barberos. Si responde pero sin datos, el
+`seed` no corrió: revisar los logs del servicio en Render.
+
+### Qué hace cada pieza del blueprint
+
+| Ajuste | Por qué |
+| --- | --- |
+| `rootDir: server` | El backend vive en una subcarpeta del repo |
+| `npm ci --include=dev` | TypeScript es devDependency y Render pone `NODE_ENV=production`, que por defecto las omite. Sin esto no hay build. |
+| `start:prod` | Aplica el esquema y luego arranca. El esquema es idempotente, así que repetirlo en cada despliegue no rompe nada. |
+| `healthCheckPath: /health` | Render reinicia el servicio si deja de responder |
+| `fromDatabase` | Render inyecta la cadena de conexión interna. Cero credenciales copiadas a mano. |
+| `DATABASE_SSL=false` | La URL interna va por la red privada de Render y no necesita TLS. Desde fuera sí: poner `true`. |
+
+### Dos cosas que te van a morder
+
+**El plan gratuito duerme el servicio.** Tras un rato sin tráfico, la primera
+petición tarda cerca de un minuto en responder mientras el contenedor vuelve a
+levantarse. Antes de una demostración, abrir `/health` un par de minutos antes
+para despertarlo.
+
+**La base de datos gratuita caduca.** Render pone fecha de expiración a las
+bases del plan gratuito. Anotar la fecha el día que se crea y, si cae antes de
+la entrega, exportar los datos o crear una nueva.
+
+### Migraciones
+
+`npm run db:setup` es **no destructivo**: usa `CREATE TABLE IF NOT EXISTS` y
+siembra con `ON CONFLICT DO NOTHING`. Se puede ejecutar en cada despliegue sin
+perder datos.
+
+`npm run db:reset` sí borra, y por eso vive en un archivo aparte
+([`db/reset.sql`](db/reset.sql)). Es solo para desarrollo y tests.
 
 ---
 
@@ -340,10 +400,14 @@ a quien la cancela.
 | `npm run dev` | Servidor con recarga en caliente |
 | `npm run build` | Compila a `dist/` |
 | `npm start` | Ejecuta lo compilado |
+| `npm run start:prod` | Aplica el esquema y arranca. Es lo que usa Render. |
 | `npm run typecheck` | `tsc --noEmit` sobre `src/` y `tests/` |
-| `npm run db:setup` | Aplica `schema.sql` + `seed.sql` a desarrollo |
-| `npm run db:setup:test` | Lo mismo sobre la base de tests |
+| `npm run db:setup` | Esquema + datos, **sin borrar nada**. Seguro en producción. |
+| `npm run db:reset` | **Borra todo** y recrea. Solo desarrollo. |
+| `npm run db:setup:test` | `db:setup` sobre la base de tests |
+| `npm run db:reset:test` | `db:reset` sobre la base de tests |
 | `npm test` | Suite completa |
+| `npm run test:coverage` | Suite + reporte de cobertura |
 
 ## Conectar el frontend (pendiente)
 

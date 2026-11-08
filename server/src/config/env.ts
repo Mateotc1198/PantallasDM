@@ -14,6 +14,8 @@ const envSchema = z.object({
   DATABASE_URL: z.string().min(1, 'DATABASE_URL es obligatoria'),
   DATABASE_URL_TEST: z.string().min(1).optional(),
   CORS_ORIGINS: z.string().default(''),
+  /** Las bases gestionadas exigen TLS; en local no hay. */
+  DATABASE_SSL: z.enum(['true', 'false']).default('false'),
 });
 
 const parsed = envSchema.safeParse(process.env);
@@ -41,6 +43,7 @@ export const env = {
   isProduction: raw.NODE_ENV === 'production',
   /** En test apunta a la base aislada: los tests nunca borran datos reales. */
   databaseUrl: isTest && raw.DATABASE_URL_TEST !== undefined ? raw.DATABASE_URL_TEST : raw.DATABASE_URL,
+  databaseSsl: raw.DATABASE_SSL === 'true',
   /** Lista blanca de CORS. Vacía = no se permite ningún origen del navegador. */
   corsOrigins: raw.CORS_ORIGINS.split(',')
     .map((origin) => origin.trim())
