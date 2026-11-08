@@ -177,6 +177,9 @@ El segundo debe devolver los dos barberos. Si responde pero sin datos, el
 | `healthCheckPath: /health` | Render reinicia el servicio si deja de responder |
 | `fromDatabase` | Render inyecta la cadena de conexión interna. Cero credenciales copiadas a mano. |
 | `DATABASE_SSL=false` | La URL interna va por la red privada de Render y no necesita TLS. Desde fuera sí: poner `true`. |
+| `JWT_SECRET` | **Secreto.** Generarlo con `node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))"` y pegarlo en Render como variable, nunca en el repositorio. |
+| `ADMIN_USERNAME` / `ADMIN_PASSWORD` | **Secretas.** Cuenta de administrador que crea `users:seed` en el arranque. |
+| `BARBERO_USERNAME` / `BARBERO_PASSWORD` / `BARBERO_BARBER_ID` | **Secretas.** Cuenta del barbero y la ficha que gestiona. |
 
 ### Dos cosas que te van a morder
 
@@ -204,33 +207,57 @@ perder datos.
 
 Todos bajo `/api/v1`.
 
-| # | Método | Ruta | Descripción |
-| --- | --- | --- | --- |
-| 1 | `GET` | `/barbers` | Lista de barberos (sin reseñas) |
-| 2 | `GET` | `/barbers/:id` | Detalle con reseñas |
-| 3 | `GET` | `/barbers/:id/slots?date=YYYY-MM-DD` | Disponibilidad del día |
-| 4 | `POST` | `/bookings` | Crear cita |
-| 5 | `GET` | `/bookings/:id` | Consultar cita |
-| 6 | `DELETE` | `/bookings/:id` | Cancelar cita |
+| # | Método | Ruta | Acceso | Descripción |
+| --- | --- | --- | --- | --- |
+| 1 | `POST` | `/auth/login` | público | Devuelve un JWT |
+| 2 | `GET` | `/auth/me` | autenticado | Identidad del dueño del token |
+| 3 | `GET` | `/barbers` | público | Lista de barberos (sin reseñas) |
+| 4 | `GET` | `/barbers/:id` | público | Detalle con reseñas |
+| 5 | `GET` | `/barbers/:id/slots?date=` | público | Disponibilidad del día |
+| 6 | `GET` | `/bookings?date=&barberId=` | **admin · barbero** | Agenda del panel |
+| 7 | `POST` | `/bookings` | público | Crear cita |
+| 8 | `GET` | `/bookings/:id` | público | Consultar cita |
+| 9 | `DELETE` | `/bookings/:id` | **admin · barbero** | Cancelar cita |
 
 Fuera del contrato de negocio: `GET /health`, sonda de infraestructura.
+
+### Quién puede qué
+
+| Rol | Puede |
+| --- | --- |
+| Público (sin cuenta) | Ver barberos y disponibilidad, **reservar**, consultar su cita por el id |
+| `barbero` | Todo lo anterior, más ver y cancelar **sus propias** citas |
+| `admin` | Todo lo anterior, sobre **todas** las citas |
+
+Reservar es público a propósito: el cliente no necesita cuenta, igual que en el
+diseño. Consultar una cita por su id también, porque es el recibo del cliente y
+el UUID no es adivinable.
+
+**El filtro `barberId` de la agenda no es seguridad.** Si lo manda un barbero,
+el servidor lo ignora y fuerza el suyo: basta con cambiar un parámetro en la
+petición para que un filtro de interfaz deje de proteger nada.
 
 ### Códigos HTTP
 
 | Endpoint | Éxito | Errores posibles |
 | --- | --- | --- |
+| `POST /auth/login` | `200` | `400` `401` `429` `500` |
+| `GET /auth/me` | `200` | `401` `500` |
 | `GET /barbers` | `200` | `500` |
 | `GET /barbers/:id` | `200` | `404` `500` |
 | `GET /barbers/:id/slots` | `200` | `400` `404` `422` `500` |
 | `POST /bookings` | `201` + `Location` | `400` `404` `409` `422` `429` `500` |
+| `GET /bookings` | `200` | `400` `401` `403` `500` |
 | `GET /bookings/:id` | `200` | `400` `404` `500` |
-| `DELETE /bookings/:id` | `204` | `400` `404` `409` `500` |
+| `DELETE /bookings/:id` | `204` | `400` `401` `403` `404` `409` `500` |
 
 La distinción entre los códigos de error no es decorativa:
 
 | Código | Significa | Ejemplo real |
 | --- | --- | --- |
 | `400` | No entiendo la petición (**forma**) | `date=14-07-2026`, teléfono con letras |
+| `401` | No sé quién eres | sin token, token manipulado o expirado |
+| `403` | Sé quién eres y no te alcanza | un barbero cancelando una cita ajena |
 | `404` | El recurso no existe | barbero o cita inexistente |
 | `409` | Choca con el **estado actual** | ese horario ya está reservado |
 | `422` | Te entiendo, pero viola una **regla** | fecha pasada, hora fuera del horario |
@@ -344,7 +371,13 @@ La colección se ejecuta entera de corrido con el Collection Runner:
   domingo), así que la colección no caduca.
 - `POST /bookings` **guarda el id** de la cita creada en una variable, y las
   peticiones siguientes lo reutilizan: no hay que copiar ids a mano.
-- Las 15 peticiones llevan tests que verifican código HTTP y forma de respuesta.
+- El login **guarda el token** en una variable y las peticiones protegidas lo
+  usan como `Bearer`. Tampoco hay que copiar tokens a mano.
+- Las 22 peticiones llevan tests que verifican código HTTP y forma de respuesta.
+
+El environment se versiona con las **contraseñas vacías**: una contraseña
+commiteada es una contraseña publicada. Rellena `adminPassword` y
+`barberoPassword` en tu copia local antes de ejecutar la colección.
 
 También se puede ejecutar sin abrir Postman:
 
@@ -383,13 +416,26 @@ tests vacían tablas y hacerlo sobre datos reales sería inaceptable.
 | Spam de reservas | `express-rate-limit` en `POST /bookings`: 10 por minuto. |
 | Payload gigante | `express.json({ limit: '10kb' })` |
 
-### Limitación conocida: no hay autenticación
+### Autenticación
 
-No está en los requisitos del proyecto. La consecuencia real es que **cualquiera
-que conozca el id de una cita puede cancelarla**. Está parcialmente mitigado
-usando UUID v4 como identificador (no se puede adivinar por fuerza bruta), pero
-la solución correcta, el día que exista login, es verificar que la cita pertenece
-a quien la cancela.
+JWT firmado con HS256 y contraseñas hasheadas con **bcrypt a 12 rondas**. La
+contraseña en claro no se guarda nunca, ni siquiera en los logs.
+
+| Decisión | Por qué |
+| --- | --- |
+| `bcryptjs` y no `bcrypt` | El nativo compila en el despliegue y puede reventar el build. El puro JavaScript es más lento, pero a nadie le importan 300 ms en un login. |
+| 12 rondas | Caro para quien prueba millones de contraseñas, imperceptible para quien entra una vez. |
+| Mensaje de error idéntico | Decir si falló el usuario o la contraseña le regala al atacante media respuesta. |
+| Hash señuelo | Si el usuario no existe se compara igual contra un hash de relleno, para que el **tiempo** de respuesta no delate qué cuentas son válidas. |
+| `JWT_SECRET` de 32+ caracteres, validado al arrancar | Un secreto corto se rompe por fuerza bruta y cualquiera podría fabricarse un token de admin. |
+| Límite de 10 intentos por minuto en el login | Es la puerta por la que se prueban contraseñas. |
+| Sin credenciales en el repositorio | Las cuentas se crean desde variables de entorno con `npm run users:seed`. Un hash commiteado sigue siendo una credencial publicada. |
+
+**Contrapartida honesta del diseño stateless:** la identidad sale del propio
+token y no se consulta la base en cada petición. Si a alguien se le cambia el
+rol o se le borra la cuenta, su token sigue siendo válido hasta que expire (8 h
+por defecto). La solución sería una lista de revocación; para este tamaño sería
+sobreingeniería, y acortar la vigencia es el ajuste razonable.
 
 ---
 
@@ -402,6 +448,7 @@ a quien la cancela.
 | `npm start` | Ejecuta lo compilado |
 | `npm run start:prod` | Aplica el esquema y arranca. Es lo que usa Render. |
 | `npm run typecheck` | `tsc --noEmit` sobre `src/` y `tests/` |
+| `npm run users:seed` | Crea o actualiza las cuentas desde las variables de entorno |
 | `npm run db:setup` | Esquema + datos, **sin borrar nada**. Seguro en producción. |
 | `npm run db:reset` | **Borra todo** y recrea. Solo desarrollo. |
 | `npm run db:setup:test` | `db:setup` sobre la base de tests |
