@@ -24,7 +24,9 @@ export default async function setup(): Promise<void> {
   await client.connect();
 
   try {
-    for (const file of ['schema.sql', 'seed.sql']) {
+    // reset primero: los tests exigen un esquema conocido, no uno heredado
+    // de una version anterior del schema.
+    for (const file of ['reset.sql', 'schema.sql', 'seed.sql']) {
       await client.query(await readFile(join(dbDirectory, file), 'utf8'));
     }
   } finally {

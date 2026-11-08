@@ -7,27 +7,27 @@
 --   barber_schedules  la REGLA de horario (no las franjas una por una)
 --   bookings          las citas reservadas
 --
--- CUIDADO: reaplicar este archivo BORRA las tablas y todo su contenido.
--- Es lo que se quiere en desarrollo (volver a un estado limpio y conocido),
--- pero en produccion esto se haria con migraciones incrementales, nunca
--- con un DROP.
+-- IDEMPOTENTE Y NO DESTRUCTIVO: se puede ejecutar en cada despliegue sin
+-- perder datos. Para volver a cero en desarrollo existe db/reset.sql, que
+-- es el unico archivo que borra.
 -- ============================================================================
 
 BEGIN;
 
-DROP TABLE IF EXISTS bookings CASCADE;
-DROP TABLE IF EXISTS barber_schedules CASCADE;
-DROP TABLE IF EXISTS reviews CASCADE;
-DROP TABLE IF EXISTS barbers CASCADE;
-DROP TYPE  IF EXISTS booking_status;
-
 -- Un ENUM y no un TEXT libre: la base rechaza cualquier estado inventado.
-CREATE TYPE booking_status AS ENUM ('activa', 'cancelada');
+-- CREATE TYPE no admite IF NOT EXISTS, de ahi el bloque condicional.
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'booking_status') THEN
+    CREATE TYPE booking_status AS ENUM ('activa', 'cancelada');
+  END IF;
+END
+$$;
 
 -- ---------------------------------------------------------------------------
 -- barbers
 -- ---------------------------------------------------------------------------
-CREATE TABLE barbers (
+CREATE TABLE IF NOT EXISTS barbers (
   id             TEXT PRIMARY KEY,
   name           TEXT        NOT NULL,
   specialty      TEXT        NOT NULL,
@@ -45,7 +45,7 @@ COMMENT ON TABLE barbers IS 'Barberos. El id es un slug legible, no un UUID, por
 -- tabla. Evita el bug clasico de desincronizacion (borras una reseña y el
 -- promedio sigue mintiendo). Trade-off: un AVG() por lectura de detalle.
 -- ---------------------------------------------------------------------------
-CREATE TABLE reviews (
+CREATE TABLE IF NOT EXISTS reviews (
   id          UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
   barber_id   TEXT        NOT NULL REFERENCES barbers(id) ON DELETE CASCADE,
   author_name TEXT        NOT NULL,
@@ -55,7 +55,7 @@ CREATE TABLE reviews (
 );
 
 -- Toda lectura de reseñas filtra por barbero.
-CREATE INDEX reviews_barber_idx ON reviews (barber_id);
+CREATE INDEX IF NOT EXISTS reviews_barber_idx ON reviews (barber_id);
 
 -- ---------------------------------------------------------------------------
 -- barber_schedules
@@ -68,7 +68,7 @@ CREATE INDEX reviews_barber_idx ON reviews (barber_id);
 -- Ausencia de fila para un weekday = ese dia no atiende. Asi "domingo cerrado"
 -- deja de ser codigo hardcodeado y pasa a ser dato.
 -- ---------------------------------------------------------------------------
-CREATE TABLE barber_schedules (
+CREATE TABLE IF NOT EXISTS barber_schedules (
   barber_id     TEXT     NOT NULL REFERENCES barbers(id) ON DELETE CASCADE,
   weekday       SMALLINT NOT NULL CHECK (weekday BETWEEN 0 AND 6), -- 0 = domingo
   first_slot_at TIME     NOT NULL,
@@ -84,7 +84,7 @@ COMMENT ON COLUMN barber_schedules.last_slot_at IS 'Hora de la ULTIMA franja res
 -- ---------------------------------------------------------------------------
 -- bookings
 -- ---------------------------------------------------------------------------
-CREATE TABLE bookings (
+CREATE TABLE IF NOT EXISTS bookings (
   id             UUID           PRIMARY KEY DEFAULT gen_random_uuid(),
   barber_id      TEXT           NOT NULL REFERENCES barbers(id) ON DELETE RESTRICT,
   booking_date   DATE           NOT NULL,
@@ -108,12 +108,12 @@ CREATE TABLE bookings (
 -- Es PARCIAL (WHERE status = 'activa') para que cancelar una cita libere el
 -- horario y se pueda volver a reservar.
 -- ===========================================================================
-CREATE UNIQUE INDEX bookings_slot_unico
+CREATE UNIQUE INDEX IF NOT EXISTS bookings_slot_unico
   ON bookings (barber_id, booking_date, booking_time)
   WHERE status = 'activa';
 
 -- Soporta la consulta de disponibilidad: ocupados de un barbero en un dia.
-CREATE INDEX bookings_barber_date_idx
+CREATE INDEX IF NOT EXISTS bookings_barber_date_idx
   ON bookings (barber_id, booking_date)
   WHERE status = 'activa';
 
