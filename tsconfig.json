@@ -13,5 +13,12 @@
   "include": [
     "**/*.ts",
     "**/*.tsx"
+  ],
+  "exclude": [
+    "node_modules",
+    "server",
+    ".expo",
+    "dist",
+    ".verify-apk"
   ]
 }
