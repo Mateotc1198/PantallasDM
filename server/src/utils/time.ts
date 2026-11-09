@@ -110,3 +110,28 @@ export function isSlotBoundary(
   }
   return (target - start) % slotMinutes === 0;
 }
+
+const ISO_MONTH_PATTERN = /^\d{4}-(0[1-9]|1[0-2])$/;
+
+/** true si el string tiene forma 'YYYY-MM' con un mes que existe. */
+export function isValidISOMonth(value: string): boolean {
+  return ISO_MONTH_PATTERN.test(value);
+}
+
+/**
+ * Todas las fechas civiles de un mes, en orden ascendente.
+ *
+ * El truco del día 0: new Date(año, mes, 0) es el último día del mes
+ * anterior, así que pedir el día 0 del mes siguiente da cuántos días tiene
+ * el mes actual. Resuelve febrero y los años bisiestos sin tabla ni reglas.
+ */
+export function daysOfMonth(month: string): string[] {
+  const [year, monthNumber] = month.split('-').map(Number);
+  const total = new Date(year, monthNumber, 0).getDate();
+
+  const days: string[] = [];
+  for (let day = 1; day <= total; day += 1) {
+    days.push(`${month}-${pad(day)}`);
+  }
+  return days;
+}

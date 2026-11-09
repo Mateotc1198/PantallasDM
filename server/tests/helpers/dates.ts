@@ -38,3 +38,31 @@ export function futureSunday(): string {
 export function pastDate(): string {
   return toISO(shiftDays(-3));
 }
+
+/** 'YYYY-MM' del mes siguiente: siempre tiene todos sus días por delante. */
+export function futureMonth(): string {
+  const date = new Date();
+  date.setDate(1);
+  date.setMonth(date.getMonth() + 1);
+  return toISO(date).slice(0, 7);
+}
+
+/** 'YYYY-MM' de un mes que ya terminó entero. */
+export function pastMonth(): string {
+  const date = new Date();
+  date.setDate(1);
+  date.setMonth(date.getMonth() - 1);
+  return toISO(date).slice(0, 7);
+}
+
+/** Un día del mes siguiente en el que el barbero atiende (nunca domingo). */
+export function openDayInFutureMonth(): string {
+  const date = new Date();
+  date.setDate(1);
+  date.setMonth(date.getMonth() + 1);
+  date.setDate(10);
+  while (date.getDay() === 0) {
+    date.setDate(date.getDate() + 1);
+  }
+  return toISO(date);
+}

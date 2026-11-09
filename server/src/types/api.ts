@@ -56,6 +56,20 @@ export interface Slot {
   status: SlotStatus;
 }
 
+/**
+ * Días de un mes con al menos una franja libre.
+ * GET /barbers/:id/availability?month=YYYY-MM
+ *
+ * Existe para que un calendario resuelva el mes completo con una sola
+ * petición en lugar de preguntar día por día.
+ */
+export interface MonthAvailability {
+  /** El mes consultado, 'YYYY-MM'. */
+  month: string;
+  /** Fechas 'YYYY-MM-DD' con cupo, en orden ascendente. */
+  days: string[];
+}
+
 /** Cita. POST /bookings, GET /bookings/:id */
 export interface Booking {
   id: string;
