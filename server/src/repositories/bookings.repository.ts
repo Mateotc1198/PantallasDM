@@ -106,13 +106,6 @@ export async function findActiveTimes(barberId: string, date: string): Promise<s
 }
 
 /**
- * Cancela la cita solo si está activa.
- *
- * El WHERE status = 'activa' hace la operación segura ante llamadas
- * simultáneas: la segunda no encuentra fila que actualizar y devuelve null,
- * en vez de sobrescribir la fecha de cancelación de la primera.
- */
-/**
  * Agenda: citas activas, con filtros opcionales por día y por barbero.
  *
  * Los filtros se resuelven dentro del SQL con "$1 IS NULL OR ..." en vez de
@@ -136,6 +129,13 @@ export async function findAgenda(filtros: {
   return rows.map(toBooking);
 }
 
+/**
+ * Cancela la cita solo si está activa.
+ *
+ * El WHERE status = 'activa' hace la operación segura ante llamadas
+ * simultáneas: la segunda no encuentra fila que actualizar y devuelve null,
+ * en vez de sobrescribir la fecha de cancelación de la primera.
+ */
 export async function cancel(id: string): Promise<Booking | null> {
   const rows = await query<BookingRow>(
     `UPDATE bookings
@@ -146,4 +146,28 @@ export async function cancel(id: string): Promise<Booking | null> {
   );
   const row = rows[0];
   return row === undefined ? null : toBooking(row);
+}
+
+/**
+ * Cuántas citas activas tiene un barbero en cada día de un rango.
+ *
+ * Devuelve solo los días que tienen alguna: la ausencia de clave significa
+ * cero. Agrupar en Postgres y no en memoria evita traerse todas las filas
+ * del mes para contarlas aquí.
+ */
+export async function countActiveByDate(
+  barberId: string,
+  from: string,
+  to: string,
+): Promise<Map<string, number>> {
+  const rows = await query<{ booking_date: string; total: number }>(
+    `SELECT booking_date, COUNT(*)::int AS total
+     FROM bookings
+     WHERE barber_id = $1
+       AND status = 'activa'
+       AND booking_date BETWEEN $2::date AND $3::date
+     GROUP BY booking_date`,
+    [barberId, from, to],
+  );
+  return new Map(rows.map((row) => [row.booking_date, row.total]));
 }

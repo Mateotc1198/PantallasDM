@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  daysOfMonth,
   generateSlotTimes,
   isSlotBoundary,
   isValidISODate,
+  isValidISOMonth,
   isValidTime,
   normalizeTime,
   toMinutes,
@@ -118,5 +120,49 @@ describe('isSlotBoundary', () => {
   it('rechaza horas fuera del horario de atención', () => {
     expect(isSlotBoundary('08:30', '09:00', '19:30', 30)).toBe(false);
     expect(isSlotBoundary('20:00', '09:00', '19:30', 30)).toBe(false);
+  });
+});
+
+describe('isValidISOMonth', () => {
+  it('acepta meses bien formados', () => {
+    expect(isValidISOMonth('2026-01')).toBe(true);
+    expect(isValidISOMonth('2026-11')).toBe(true);
+    expect(isValidISOMonth('2026-12')).toBe(true);
+  });
+
+  it('rechaza meses fuera de rango o con otro formato', () => {
+    expect(isValidISOMonth('2026-00')).toBe(false);
+    expect(isValidISOMonth('2026-13')).toBe(false);
+    expect(isValidISOMonth('2026-1')).toBe(false);
+    expect(isValidISOMonth('11-2026')).toBe(false);
+    expect(isValidISOMonth('2026-11-09')).toBe(false);
+    expect(isValidISOMonth('')).toBe(false);
+  });
+});
+
+describe('daysOfMonth', () => {
+  it('devuelve los treinta días de noviembre en orden', () => {
+    const days = daysOfMonth('2026-11');
+
+    expect(days).toHaveLength(30);
+    expect(days[0]).toBe('2026-11-01');
+    expect(days[29]).toBe('2026-11-30');
+  });
+
+  it('rellena el día con cero a la izquierda', () => {
+    expect(daysOfMonth('2026-11')[8]).toBe('2026-11-09');
+  });
+
+  it('febrero de un año bisiesto tiene 29 días', () => {
+    expect(daysOfMonth('2028-02')).toHaveLength(29);
+  });
+
+  it('febrero de un año normal tiene 28', () => {
+    expect(daysOfMonth('2026-02')).toHaveLength(28);
+  });
+
+  it('un año divisible por 100 pero no por 400 no es bisiesto', () => {
+    // 2100 es la trampa clásica: múltiplo de 4, pero no es bisiesto.
+    expect(daysOfMonth('2100-02')).toHaveLength(28);
   });
 });

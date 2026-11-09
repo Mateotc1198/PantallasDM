@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { isValidISODate } from '../../../utils/time.js';
+import { isValidISODate, isValidISOMonth } from '../../../utils/time.js';
 
 /**
  * Esquemas de entrada de los endpoints de barberos.
@@ -20,5 +20,12 @@ export const slotsQuerySchema = z.object({
     .refine(isValidISODate, 'formato esperado YYYY-MM-DD y fecha existente'),
 });
 
+export const monthQuerySchema = z.object({
+  month: z
+    .string({ message: 'el parámetro month es obligatorio' })
+    .refine(isValidISOMonth, 'formato esperado YYYY-MM'),
+});
+
 export type BarberIdParams = z.infer<typeof barberIdParamsSchema>;
 export type SlotsQuery = z.infer<typeof slotsQuerySchema>;
+export type MonthQuery = z.infer<typeof monthQuerySchema>;
