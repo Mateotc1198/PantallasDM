@@ -1,8 +1,10 @@
+import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   KeyboardAvoidingView,
   Platform,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -11,12 +13,14 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { type ApiError, toApiError } from '../../src/api/client';
 import { BarberChip } from '../../src/components/BarberChip';
 import { Card } from '../../src/components/Card';
 import { PrimaryButton } from '../../src/components/PrimaryButton';
 import { StepHeader } from '../../src/components/StepHeader';
 import { SummaryRow } from '../../src/components/SummaryRow';
 import { useBooking } from '../../src/context/BookingContext';
+import { createBooking } from '../../src/data/bookings';
 import { useBookingNavigation } from '../../src/hooks/useBookingNavigation';
 import { useRequireBooking } from '../../src/hooks/useRequireBooking';
 import { colors, radius, spacing, typography } from '../../src/theme/tokens';
@@ -24,8 +28,6 @@ import { formatShortDate, formatTime12h } from '../../src/utils/date';
 
 const MIN_NAME_LENGTH = 3;
 const PHONE_LENGTH = 10;
-/** Simula la latencia del futuro POST /bookings. */
-const SUBMIT_DELAY_MS = 1200;
 
 const KEYBOARD_BEHAVIOR = Platform.OS === 'ios' ? 'padding' : 'height';
 
@@ -35,19 +37,21 @@ export default function DatosScreen() {
   const router = useRouter();
   const { goBack, changeBarber } = useBookingNavigation();
   const ready = useRequireBooking(['barber', 'date', 'time']);
-  const { barber, date, time, name, phone, setName, setPhone } = useBooking();
+  const { barber, date, time, name, phone, setName, setPhone, setBooking } = useBooking();
 
   const [focused, setFocused] = useState<FocusedField>(null);
   const [submitting, setSubmitting] = useState(false);
-  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [error, setError] = useState<ApiError | null>(null);
 
-  // Evita navegar sobre una pantalla ya desmontada si el usuario vuelve atrás
-  // mientras corre la espera simulada.
+  /**
+   * Evita tocar el estado de una pantalla ya desmontada: el usuario puede
+   * retroceder mientras la petición sigue en vuelo, y la respuesta llegará
+   * de todos modos.
+   */
+  const montado = useRef(true);
   useEffect(
     () => () => {
-      if (timeoutRef.current !== null) {
-        clearTimeout(timeoutRef.current);
-      }
+      montado.current = false;
     },
     [],
   );
@@ -63,16 +67,52 @@ export default function DatosScreen() {
     [setPhone],
   );
 
-  const confirm = useCallback(() => {
-    if (!isValid || submitting) {
+  const confirm = useCallback(async () => {
+    if (!isValid || submitting || barber === null || date === null || time === null) {
       return;
     }
+
     setSubmitting(true);
+    setError(null);
     setName(trimmedName);
-    timeoutRef.current = setTimeout(() => {
+
+    try {
+      const booking = await createBooking({
+        barberId: barber.id,
+        date,
+        time,
+        customerName: trimmedName,
+        customerPhone: phone,
+      });
+
+      if (!montado.current) {
+        return;
+      }
+      // Se guarda la cita del servidor, no la que creíamos estar creando: la
+      // pantalla final muestra lo que quedó registrado de verdad.
+      setBooking(booking);
       router.replace('/reserva/confirmada');
-    }, SUBMIT_DELAY_MS);
-  }, [isValid, router, setName, submitting, trimmedName]);
+    } catch (fallo: unknown) {
+      if (montado.current) {
+        setError(toApiError(fallo));
+      }
+    } finally {
+      if (montado.current) {
+        setSubmitting(false);
+      }
+    }
+  }, [
+    barber,
+    date,
+    isValid,
+    phone,
+    router,
+    setBooking,
+    setName,
+    submitting,
+    time,
+    trimmedName,
+  ]);
 
   if (!ready || barber === null || date === null || time === null) {
     return null;
@@ -105,6 +145,7 @@ export default function DatosScreen() {
               autoCapitalize="words"
               autoCorrect={false}
               returnKeyType="next"
+              editable={!submitting}
               accessibilityLabel="Tu nombre"
               style={[styles.input, focused === 'name' && styles.inputFocused]}
             />
@@ -118,10 +159,13 @@ export default function DatosScreen() {
               keyboardType="phone-pad"
               maxLength={PHONE_LENGTH}
               returnKeyType="done"
+              editable={!submitting}
               accessibilityLabel="Tu número de celular"
               style={[styles.input, focused === 'phone' && styles.inputFocused]}
             />
           </View>
+
+          {error !== null ? <SubmitError error={error} onPickAnotherTime={goBack} /> : null}
         </ScrollView>
 
         <View style={styles.footer}>
@@ -130,11 +174,60 @@ export default function DatosScreen() {
             loadingLabel="Reservando..."
             loading={submitting}
             disabled={!isValid}
-            onPress={confirm}
+            onPress={() => {
+              void confirm();
+            }}
           />
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
+  );
+}
+
+interface SubmitErrorProps {
+  error: ApiError;
+  onPickAnotherTime: () => void;
+}
+
+/**
+ * Aviso de que la reserva no se completó.
+ *
+ * El 409 merece un trato aparte y no un "inténtalo de nuevo": reintentar no
+ * sirve de nada, porque el horario ya es de otra persona. Es exactamente la
+ * carrera que el índice único de la base está ahí para ganar, y la interfaz
+ * tiene que honrarla mandando al usuario a elegir otra hora. Si no, la
+ * garantía del servidor se convierte en un error incomprensible.
+ */
+function SubmitError({ error, onPickAnotherTime }: SubmitErrorProps) {
+  const conflicto = error.isConflict;
+
+  return (
+    <View style={[styles.alert, conflicto && styles.alertConflict]}>
+      <Ionicons
+        name={conflicto ? 'time-outline' : 'alert-circle-outline'}
+        size={20}
+        color={conflicto ? colors.primary : colors.busy}
+      />
+      <View style={styles.alertBody}>
+        <Text style={styles.alertTitle}>
+          {conflicto ? 'Ese horario acaba de ocuparse' : 'No pudimos reservar'}
+        </Text>
+        <Text style={styles.alertDetail}>
+          {conflicto
+            ? 'Alguien lo tomó mientras completabas tus datos. Elige otra hora disponible.'
+            : error.message}
+        </Text>
+        {conflicto ? (
+          <Pressable
+            onPress={onPickAnotherTime}
+            accessibilityRole="button"
+            style={({ pressed }) => [styles.alertAction, pressed && styles.pressed]}
+          >
+            <Text style={styles.alertActionLabel}>Elegir otra hora</Text>
+          </Pressable>
+        ) : null}
+      </View>
+    </View>
   );
 }
 
@@ -171,6 +264,43 @@ const styles = StyleSheet.create({
   },
   inputFocused: {
     borderColor: colors.primary,
+  },
+  alert: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    padding: spacing.md,
+    borderRadius: radius.md,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.busy,
+  },
+  alertConflict: {
+    borderColor: colors.primary,
+  },
+  alertBody: {
+    flex: 1,
+    gap: spacing.xs,
+  },
+  alertTitle: {
+    ...typography.bodyStrong,
+    color: colors.textPrimary,
+  },
+  alertDetail: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    lineHeight: 19,
+  },
+  alertAction: {
+    alignSelf: 'flex-start',
+    paddingTop: spacing.xs,
+  },
+  alertActionLabel: {
+    ...typography.caption,
+    fontWeight: '700',
+    color: colors.primary,
+  },
+  pressed: {
+    opacity: 0.6,
   },
   footer: {
     padding: spacing.md,
