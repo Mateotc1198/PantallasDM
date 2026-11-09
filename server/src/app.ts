@@ -18,6 +18,22 @@ const app = express();
 // No anunciar la tecnología del servidor: menos información para un atacante.
 app.disable('x-powered-by');
 
+/**
+ * La API se sirve detrás del proxy inverso de Render. Sin esto, req.ip es la
+ * IP del proxy en TODAS las peticiones y express-rate-limit mete a todos los
+ * usuarios en el mismo cubo: una sola persona equivocándose de contraseña
+ * dejaría a los demás sin poder entrar.
+ *
+ * Se confía en exactamente un salto, no en `true`. Confiar en toda la cadena
+ * dejaría que un cliente falsificara X-Forwarded-For y esquivara el límite
+ * rotando IPs inventadas; con 1, Express lee la entrada que escribió el proxy
+ * de Render, que el cliente no controla.
+ *
+ * En local y en los tests no hay proxy, así que req.ip es la IP real del
+ * socket y no hay nada en lo que confiar.
+ */
+app.set('trust proxy', env.isProduction ? 1 : false);
+
 // Cabeceras de seguridad (CSP, nosniff, frameguard, etc.).
 app.use(helmet());
 
