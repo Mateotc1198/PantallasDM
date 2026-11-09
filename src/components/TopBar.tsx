@@ -1,13 +1,17 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { colors, fontFamily, spacing } from '../theme/tokens';
+import { fontFamily, spacing, type Palette } from '../theme/tokens';
+import { useTheme } from '../theme/ThemeContext';
+import { useThemedStyles } from '../theme/useThemedStyles';
 
 interface TopBarProps {
   onClose: () => void;
 }
 
 export function TopBar({ onClose }: TopBarProps) {
+  const styles = useThemedStyles(makeStyles);
+  const { colors } = useTheme();
   return (
     <View style={styles.container}>
       <Pressable
@@ -19,12 +23,12 @@ export function TopBar({ onClose }: TopBarProps) {
       >
         <Ionicons name="close" size={22} color={colors.textSecondary} />
       </Pressable>
-      <Text style={styles.brand}>Barber</Text>
+      <Text style={styles.brand}>ZonaBarber</Text>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: Palette) => StyleSheet.create({
   container: {
     height: 52,
     alignItems: 'center',

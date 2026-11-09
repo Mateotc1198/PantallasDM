@@ -1,6 +1,7 @@
 import { StyleSheet, Text, View } from 'react-native';
 
-import { colors, spacing, typography } from '../theme/tokens';
+import { spacing, typography, type Palette } from '../theme/tokens';
+import { useThemedStyles } from '../theme/useThemedStyles';
 
 interface SummaryRowProps {
   label: string;
@@ -9,6 +10,7 @@ interface SummaryRowProps {
 
 /** Fila etiqueta/valor del resumen de la cita (pasos 5 y confirmación). */
 export function SummaryRow({ label, value }: SummaryRowProps) {
+  const styles = useThemedStyles(makeStyles);
   return (
     <View style={styles.row}>
       <Text style={styles.label}>{label}</Text>
@@ -19,7 +21,7 @@ export function SummaryRow({ label, value }: SummaryRowProps) {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: Palette) => StyleSheet.create({
   row: {
     flexDirection: 'row',
     alignItems: 'center',

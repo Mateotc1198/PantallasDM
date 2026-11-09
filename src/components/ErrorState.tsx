@@ -2,7 +2,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import type { ApiError } from '../api/client';
-import { colors, radius, spacing, typography } from '../theme/tokens';
+import { radius, spacing, typography, type Palette } from '../theme/tokens';
+import { useTheme } from '../theme/ThemeContext';
+import { useThemedStyles } from '../theme/useThemedStyles';
 
 interface ErrorStateProps {
   error: ApiError;
@@ -41,6 +43,8 @@ function mensajeDe(error: ApiError): { titulo: string; detalle: string } {
 }
 
 export function ErrorState({ error, onRetry }: ErrorStateProps) {
+  const styles = useThemedStyles(makeStyles);
+  const { colors } = useTheme();
   const { titulo, detalle } = mensajeDe(error);
 
   return (
@@ -64,7 +68,7 @@ export function ErrorState({ error, onRetry }: ErrorStateProps) {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: Palette) => StyleSheet.create({
   container: {
     paddingVertical: spacing.xl,
     paddingHorizontal: spacing.md,

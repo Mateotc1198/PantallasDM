@@ -23,7 +23,9 @@ import { useBooking } from '../../src/context/BookingContext';
 import { createBooking } from '../../src/data/bookings';
 import { useBookingNavigation } from '../../src/hooks/useBookingNavigation';
 import { useRequireBooking } from '../../src/hooks/useRequireBooking';
-import { colors, radius, spacing, typography } from '../../src/theme/tokens';
+import { radius, spacing, typography, type Palette } from '../../src/theme/tokens';
+import { useTheme } from '../../src/theme/ThemeContext';
+import { useThemedStyles } from '../../src/theme/useThemedStyles';
 import { formatShortDate, formatTime12h } from '../../src/utils/date';
 
 const MIN_NAME_LENGTH = 3;
@@ -34,6 +36,8 @@ const KEYBOARD_BEHAVIOR = Platform.OS === 'ios' ? 'padding' : 'height';
 type FocusedField = 'name' | 'phone' | null;
 
 export default function DatosScreen() {
+  const styles = useThemedStyles(makeStyles);
+  const { colors } = useTheme();
   const router = useRouter();
   const { goBack, changeBarber } = useBookingNavigation();
   const ready = useRequireBooking(['barber', 'date', 'time']);
@@ -199,6 +203,8 @@ interface SubmitErrorProps {
  * garantía del servidor se convierte en un error incomprensible.
  */
 function SubmitError({ error, onPickAnotherTime }: SubmitErrorProps) {
+  const styles = useThemedStyles(makeStyles);
+  const { colors } = useTheme();
   const conflicto = error.isConflict;
 
   return (
@@ -206,7 +212,7 @@ function SubmitError({ error, onPickAnotherTime }: SubmitErrorProps) {
       <Ionicons
         name={conflicto ? 'time-outline' : 'alert-circle-outline'}
         size={20}
-        color={conflicto ? colors.primary : colors.busy}
+        color={conflicto ? colors.primaryText : colors.busy}
       />
       <View style={styles.alertBody}>
         <Text style={styles.alertTitle}>
@@ -231,7 +237,7 @@ function SubmitError({ error, onPickAnotherTime }: SubmitErrorProps) {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: Palette) => StyleSheet.create({
   container: {
     flex: 1,
   },
@@ -297,7 +303,7 @@ const styles = StyleSheet.create({
   alertActionLabel: {
     ...typography.caption,
     fontWeight: '700',
-    color: colors.primary,
+    color: colors.primaryText,
   },
   pressed: {
     opacity: 0.6,

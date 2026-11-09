@@ -6,7 +6,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { PrimaryButton } from '../src/components/PrimaryButton';
 import { useBooking } from '../src/context/BookingContext';
-import { colors, radius, spacing, typography } from '../src/theme/tokens';
+import { radius, spacing, typography, type Palette } from '../src/theme/tokens';
+import { useTheme } from '../src/theme/ThemeContext';
+import { useThemedStyles } from '../src/theme/useThemedStyles';
 
 const HERO_IMAGE =
   'https://images.unsplash.com/photo-1503951914875-452162b0f3f1?auto=format&fit=crop&w=1080&q=80';
@@ -15,6 +17,8 @@ const HERO_IMAGE =
 const WHATSAPP_URL = 'https://wa.me/573001112233';
 
 export default function HomeScreen() {
+  const styles = useThemedStyles(makeStyles);
+  const { colors } = useTheme();
   const router = useRouter();
   const { reset } = useBooking();
 
@@ -66,7 +70,7 @@ export default function HomeScreen() {
               style={({ pressed }) => [styles.contact, pressed && styles.pressed]}
             >
               <Text style={styles.contactLabel}>Contáctanos</Text>
-              <Ionicons name="chevron-down" size={14} color={colors.textSecondary} />
+              <Ionicons name="chevron-down" size={14} color={colors.heroTextMuted} />
             </Pressable>
           </View>
 
@@ -76,7 +80,7 @@ export default function HomeScreen() {
             accessibilityLabel="Escribir por WhatsApp"
             style={({ pressed }) => [styles.fab, pressed && styles.pressed]}
           >
-            <Ionicons name="logo-whatsapp" size={28} color={colors.textPrimary} />
+            <Ionicons name="logo-whatsapp" size={28} color={colors.heroText} />
           </Pressable>
         </SafeAreaView>
       </View>
@@ -84,7 +88,7 @@ export default function HomeScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: Palette) => StyleSheet.create({
   hero: {
     flex: 1,
     backgroundColor: colors.bg,
@@ -110,7 +114,7 @@ const styles = StyleSheet.create({
   },
   title: {
     ...typography.heroTitle,
-    color: colors.textPrimary,
+    color: colors.heroText,
     textAlign: 'center',
   },
   titleAccent: {
@@ -118,7 +122,7 @@ const styles = StyleSheet.create({
   },
   description: {
     ...typography.body,
-    color: colors.textSecondary,
+    color: colors.heroText,
     textAlign: 'center',
     lineHeight: 21,
   },
@@ -152,7 +156,7 @@ const styles = StyleSheet.create({
   },
   contactLabel: {
     ...typography.caption,
-    color: colors.textSecondary,
+    color: colors.heroTextMuted,
   },
   pressed: {
     opacity: 0.7,

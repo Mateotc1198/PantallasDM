@@ -1,7 +1,9 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Pressable, StyleSheet, Text, View, type DimensionValue } from 'react-native';
 
-import { colors, spacing, typography } from '../theme/tokens';
+import { spacing, typography, type Palette } from '../theme/tokens';
+import { useTheme } from '../theme/ThemeContext';
+import { useThemedStyles } from '../theme/useThemedStyles';
 
 const DEFAULT_TOTAL = 5;
 
@@ -13,6 +15,8 @@ interface StepHeaderProps {
 }
 
 export function StepHeader({ step, total = DEFAULT_TOTAL, label, onBack }: StepHeaderProps) {
+  const styles = useThemedStyles(makeStyles);
+  const { colors } = useTheme();
   const ratio = Math.min(Math.max(step / total, 0), 1);
   const fillWidth: DimensionValue = `${ratio * 100}%`;
 
@@ -26,7 +30,7 @@ export function StepHeader({ step, total = DEFAULT_TOTAL, label, onBack }: StepH
           accessibilityLabel="Volver al paso anterior"
           style={({ pressed }) => [styles.backButton, pressed && styles.pressed]}
         >
-          <Ionicons name="chevron-back" size={16} color={colors.primary} />
+          <Ionicons name="chevron-back" size={16} color={colors.primaryText} />
           <Text style={styles.label}>{label}</Text>
         </Pressable>
         <Text style={styles.counter}>{`Paso ${step} de ${total}`}</Text>
@@ -38,7 +42,7 @@ export function StepHeader({ step, total = DEFAULT_TOTAL, label, onBack }: StepH
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: Palette) => StyleSheet.create({
   container: {
     paddingTop: spacing.md,
   },
@@ -59,7 +63,7 @@ const styles = StyleSheet.create({
   },
   label: {
     ...typography.overline,
-    color: colors.primary,
+    color: colors.primaryText,
   },
   counter: {
     ...typography.meta,

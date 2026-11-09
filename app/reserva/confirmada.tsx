@@ -8,7 +8,9 @@ import { SummaryRow } from '../../src/components/SummaryRow';
 import { useBooking } from '../../src/context/BookingContext';
 import { useBookingNavigation } from '../../src/hooks/useBookingNavigation';
 import { useRequireBooking } from '../../src/hooks/useRequireBooking';
-import { colors, radius, spacing, typography } from '../../src/theme/tokens';
+import { radius, spacing, typography, type Palette } from '../../src/theme/tokens';
+import { useTheme } from '../../src/theme/ThemeContext';
+import { useThemedStyles } from '../../src/theme/useThemedStyles';
 import { formatDayMonthYear, formatTime12h } from '../../src/utils/date';
 
 const CHECK_CIRCLE = 64;
@@ -22,6 +24,8 @@ const CHECK_CIRCLE = 64;
  * Enseñar lo primero sería afirmar algo que no hemos comprobado.
  */
 export default function ConfirmadaScreen() {
+  const styles = useThemedStyles(makeStyles);
+  const { colors } = useTheme();
   const { goHome } = useBookingNavigation();
   const ready = useRequireBooking(['booking']);
   const { barber, booking } = useBooking();
@@ -34,7 +38,7 @@ export default function ConfirmadaScreen() {
     <SafeAreaView edges={['bottom', 'left', 'right']} style={styles.container}>
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.check}>
-          <Ionicons name="checkmark" size={32} color={colors.primary} />
+          <Ionicons name="checkmark" size={32} color={colors.primaryText} />
         </View>
         <Text style={styles.title}>Cita confirmada</Text>
         <Text style={styles.subtitle}>{`Te esperamos, ${booking.customerName}.`}</Text>
@@ -70,7 +74,7 @@ export default function ConfirmadaScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: Palette) => StyleSheet.create({
   container: {
     flex: 1,
   },

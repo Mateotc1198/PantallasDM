@@ -1,6 +1,7 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { colors, radius, spacing, typography } from '../theme/tokens';
+import { radius, spacing, typography, type Palette } from '../theme/tokens';
+import { useThemedStyles } from '../theme/useThemedStyles';
 import type { BarberSummary } from '../types/api';
 import { Avatar } from './Avatar';
 
@@ -13,6 +14,7 @@ interface BarberChipProps {
 }
 
 export function BarberChip({ barber, onChange }: BarberChipProps) {
+  const styles = useThemedStyles(makeStyles);
   return (
     <View style={styles.container}>
       <Avatar uri={barber.avatar} size={AVATAR_SIZE} />
@@ -35,7 +37,7 @@ export function BarberChip({ barber, onChange }: BarberChipProps) {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: Palette) => StyleSheet.create({
   container: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -61,7 +63,7 @@ const styles = StyleSheet.create({
   change: {
     ...typography.caption,
     fontWeight: '700',
-    color: colors.primary,
+    color: colors.primaryText,
   },
   pressed: {
     opacity: 0.6,

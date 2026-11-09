@@ -4,13 +4,15 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { TopBar } from '../../src/components/TopBar';
 import { useBookingNavigation } from '../../src/hooks/useBookingNavigation';
-import { colors } from '../../src/theme/tokens';
+import type { Palette } from '../../src/theme/tokens';
+import { useThemedStyles } from '../../src/theme/useThemedStyles';
 
 /**
  * La TopBar vive en el layout, no en cada paso: así queda fija y no entra en
  * la animación de transición entre pantallas.
  */
 export default function ReservaLayout() {
+  const styles = useThemedStyles(makeStyles);
   const { goHome } = useBookingNavigation();
 
   return (
@@ -29,7 +31,7 @@ export default function ReservaLayout() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: Palette) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.bg,
