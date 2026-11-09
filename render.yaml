@@ -63,3 +63,22 @@ services:
       # no usa CORS; esto es solo para Expo Web.
       - key: CORS_ORIGINS
         sync: false
+
+      # Secreto de firma de los JWT.
+      #
+      # sync: false significa que Render lo pide al sincronizar y lo guarda
+      # cifrado en su panel: el valor nunca se escribe en el repositorio. Lo
+      # que queda versionado es QUÉ hace falta, no cuál es.
+      #
+      # El servicio valida al arrancar que tenga 32 caracteres o más y se
+      # niega a levantar si no es así, de modo que un despliegue sin este
+      # valor falla en el segundo cero y no dos horas después.
+      - key: JWT_SECRET
+        sync: false
+
+      # Cuentas iniciales del panel. No se declaran aquí porque son
+      # opcionales: scripts/seed-users.mjs termina sin error si faltan y el
+      # servicio arranca igual, simplemente sin cuentas sembradas. Se
+      # configuran en el panel de Render cuando se quieran:
+      #   ADMIN_USERNAME, ADMIN_PASSWORD
+      #   BARBERO_USERNAME, BARBERO_PASSWORD, BARBERO_BARBER_ID
