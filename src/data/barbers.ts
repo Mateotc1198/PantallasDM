@@ -1,67 +1,27 @@
-import type { Barber } from '../types/api';
+import { apiGet } from '../api/client';
+import type { Barber, BarberSummary } from '../types/api';
 
 /**
- * Mock del recurso /barbers.
+ * Recurso /barbers.
  *
- * Las pantallas consumen las funciones de abajo, nunca el array: cuando exista
- * el backend, estas funciones pasan a ser peticiones HTTP (async) y ninguna
- * pantalla cambia su forma de pedir los datos.
+ * Las pantallas siguen llamando a estas funciones y no a fetch: la capa de
+ * datos es la frontera. Cuando esto eran arreglos en memoria, las firmas eran
+ * las mismas salvo por el async, y ese detalle es justamente el que obligó a
+ * que las pantallas aprendieran a esperar.
  */
-const BARBERS: Barber[] = [
-  {
-    id: 'luis-gomez',
-    name: 'Luis Gomez',
-    specialty: 'Especialista en fades y cortes modernos.',
-    avatar: 'https://i.pravatar.cc/240?img=12',
-    rating: 5,
-    reviewsCount: 2,
-    servicesCount: 3,
-    reviews: [
-      {
-        id: 'luis-gomez-1',
-        authorName: 'Andrés Rojas',
-        comment: 'El mejor fade que me han hecho. Quedó impecable y sin una sola línea dura.',
-        rating: 5,
-      },
-      {
-        id: 'luis-gomez-2',
-        authorName: 'Camilo Restrepo',
-        comment: 'Puntual, conversador y muy preciso con la máquina. Vuelvo cada dos semanas.',
-        rating: 5,
-      },
-    ],
-  },
-  {
-    id: 'alexander-escobar',
-    name: 'Alexander Escobar',
-    specialty: 'Experto en barba y tratamientos de hidratación capilar.',
-    avatar: 'https://i.pravatar.cc/240?img=33',
-    rating: 5,
-    reviewsCount: 2,
-    servicesCount: 3,
-    reviews: [
-      {
-        id: 'alexander-escobar-1',
-        authorName: 'Julián Mejía',
-        comment: 'Me arregló la barba con toalla caliente y aceite. Salí como nuevo.',
-        rating: 5,
-      },
-      {
-        id: 'alexander-escobar-2',
-        authorName: 'Santiago Duque',
-        comment: 'Sabe exactamente qué tratamiento necesita cada tipo de pelo. Recomendado.',
-        rating: 5,
-      },
-    ],
-  },
-];
 
-/** Espeja GET /barbers */
-export function getBarbers(): Barber[] {
-  return BARBERS;
+/** GET /barbers — sin reseñas: la lista no necesita los hijos de cada ficha. */
+export function getBarbers(): Promise<BarberSummary[]> {
+  return apiGet<BarberSummary[]>('/api/v1/barbers');
 }
 
-/** Espeja GET /barbers/:id */
-export function getBarberById(id: string): Barber | null {
-  return BARBERS.find((barber) => barber.id === id) ?? null;
+/**
+ * GET /barbers/:id — la ficha completa, con reseñas.
+ *
+ * Lanza ApiError 404 si no existe, en vez de devolver null: desde la app solo
+ * se piden barberos que vinieron de la lista, así que un id desconocido no es
+ * un caso normal que haya que contemplar en cada pantalla, es un fallo.
+ */
+export function getBarberById(id: string): Promise<Barber> {
+  return apiGet<Barber>(`/api/v1/barbers/${encodeURIComponent(id)}`);
 }

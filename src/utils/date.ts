@@ -134,3 +134,36 @@ export function compareMonths(
 ): number {
   return a.year * 12 + a.month - (b.year * 12 + b.month);
 }
+
+/**
+ * Claves de mes 'YYYY-MM'.
+ *
+ * El mes visible del calendario dejó de ser un detalle interno del componente
+ * y pasó a ser lo que determina qué disponibilidad hay que pedirle a la API,
+ * así que necesita un formato estable que viaje bien en una URL.
+ *
+ * Cuidado con el desfase: Date usa meses 0-11 y la clave usa 1-12, como el
+ * resto del mundo.
+ */
+
+/** 'YYYY-MM' del mes al que pertenece una fecha ISO. */
+export function monthKeyOf(iso: string): string {
+  return iso.slice(0, 7);
+}
+
+/** Año y mes de Date (0-11) -> 'YYYY-MM'. */
+export function toMonthKey(year: number, month: number): string {
+  return `${year}-${String(month + 1).padStart(2, '0')}`;
+}
+
+/** 'YYYY-MM' -> año y mes con el mes 0-11 que espera Date. */
+export function fromMonthKey(key: string): { year: number; month: number } {
+  const [year, month] = key.split('-').map(Number);
+  return { year, month: month - 1 };
+}
+
+/** 'YYYY-MM' del mes en curso. */
+export function currentMonthKey(): string {
+  const today = startOfToday();
+  return toMonthKey(today.getFullYear(), today.getMonth());
+}

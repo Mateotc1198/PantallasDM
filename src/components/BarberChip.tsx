@@ -1,13 +1,13 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { colors, radius, spacing, typography } from '../theme/tokens';
-import type { Barber } from '../types/api';
+import type { BarberSummary } from '../types/api';
 import { Avatar } from './Avatar';
 
 const AVATAR_SIZE = 40;
 
 interface BarberChipProps {
-  barber: Barber;
+  barber: BarberSummary;
   /** La navegación la decide la pantalla; el chip solo avisa del intento. */
   onChange: () => void;
 }

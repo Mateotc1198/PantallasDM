@@ -1,17 +1,20 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { useCallback, useMemo } from 'react';
+import { useCallback } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Avatar } from '../../src/components/Avatar';
 import { Card } from '../../src/components/Card';
+import { ErrorState } from '../../src/components/ErrorState';
+import { LoadingState } from '../../src/components/LoadingState';
 import { StepHeader } from '../../src/components/StepHeader';
 import { useBooking } from '../../src/context/BookingContext';
 import { getBarbers } from '../../src/data/barbers';
+import { useAsync } from '../../src/hooks/useAsync';
 import { useBookingNavigation } from '../../src/hooks/useBookingNavigation';
 import { colors, spacing, typography } from '../../src/theme/tokens';
-import type { Barber } from '../../src/types/api';
+import type { BarberSummary } from '../../src/types/api';
 
 const AVATAR_SIZE = 44;
 
@@ -19,10 +22,11 @@ export default function BarberoScreen() {
   const router = useRouter();
   const { goBack } = useBookingNavigation();
   const { setBarber } = useBooking();
-  const barbers = useMemo(() => getBarbers(), []);
+
+  const { data: barbers, loading, error, slow, reload } = useAsync(() => getBarbers(), []);
 
   const selectBarber = useCallback(
-    (barber: Barber) => {
+    (barber: BarberSummary) => {
       setBarber(barber);
       router.push('/reserva/perfil');
     },
@@ -38,7 +42,15 @@ export default function BarberoScreen() {
           <Text style={styles.subtitle}>Con quién quieres tu próxima cita</Text>
         </View>
 
-        {barbers.map((barber) => (
+        {loading ? <LoadingState label="Buscando barberos..." slow={slow} /> : null}
+
+        {error !== null ? <ErrorState error={error} onRetry={reload} /> : null}
+
+        {barbers?.length === 0 ? (
+          <Text style={styles.empty}>No hay barberos disponibles en este momento.</Text>
+        ) : null}
+
+        {barbers?.map((barber) => (
           <Card
             key={barber.id}
             onPress={() => selectBarber(barber)}
@@ -80,6 +92,12 @@ const styles = StyleSheet.create({
   subtitle: {
     ...typography.body,
     color: colors.textSecondary,
+  },
+  empty: {
+    ...typography.body,
+    color: colors.textMuted,
+    textAlign: 'center',
+    paddingVertical: spacing.xl,
   },
   row: {
     flexDirection: 'row',

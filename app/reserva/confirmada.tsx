@@ -13,12 +13,20 @@ import { formatDayMonthYear, formatTime12h } from '../../src/utils/date';
 
 const CHECK_CIRCLE = 64;
 
+/**
+ * Confirmación.
+ *
+ * Todo lo que se muestra sale de la cita que devolvió el servidor, no del
+ * estado local del formulario. La diferencia no es cosmética: el estado local
+ * dice lo que el usuario pidió, y la respuesta dice lo que quedó guardado.
+ * Enseñar lo primero sería afirmar algo que no hemos comprobado.
+ */
 export default function ConfirmadaScreen() {
   const { goHome } = useBookingNavigation();
-  const ready = useRequireBooking(['barber', 'date', 'time', 'customer']);
-  const { barber, date, time, name, phone } = useBooking();
+  const ready = useRequireBooking(['booking']);
+  const { barber, booking } = useBooking();
 
-  if (!ready || barber === null || date === null || time === null) {
+  if (!ready || booking === null) {
     return null;
   }
 
@@ -29,16 +37,29 @@ export default function ConfirmadaScreen() {
           <Ionicons name="checkmark" size={32} color={colors.primary} />
         </View>
         <Text style={styles.title}>Cita confirmada</Text>
-        <Text style={styles.subtitle}>{`Te esperamos, ${name}.`}</Text>
+        <Text style={styles.subtitle}>{`Te esperamos, ${booking.customerName}.`}</Text>
 
         <View style={styles.card}>
           <Card>
-            <SummaryRow label="Barbero" value={barber.name} />
-            <SummaryRow label="Fecha" value={formatDayMonthYear(date)} />
-            <SummaryRow label="Hora" value={formatTime12h(time)} />
-            <SummaryRow label="Nombre" value={name} />
-            <SummaryRow label="Celular" value={phone} />
+            <SummaryRow label="Barbero" value={barber?.name ?? booking.barberId} />
+            <SummaryRow label="Fecha" value={formatDayMonthYear(booking.date)} />
+            <SummaryRow label="Hora" value={formatTime12h(booking.time)} />
+            <SummaryRow label="Nombre" value={booking.customerName} />
+            <SummaryRow label="Celular" value={booking.customerPhone} />
           </Card>
+        </View>
+
+        {/*
+          El código es el identificador real de la cita en la base de datos.
+          Se muestra completo y seleccionable a propósito: es lo que permite
+          consultarla o cancelarla después, y un fragmento recortado no
+          serviría para buscarla.
+        */}
+        <View style={styles.codeBox}>
+          <Text style={styles.codeLabel}>Código de la cita</Text>
+          <Text style={styles.code} selectable>
+            {booking.id}
+          </Text>
         </View>
       </ScrollView>
 
@@ -79,6 +100,21 @@ const styles = StyleSheet.create({
   card: {
     alignSelf: 'stretch',
     paddingTop: spacing.md,
+  },
+  codeBox: {
+    alignSelf: 'stretch',
+    alignItems: 'center',
+    gap: spacing.xs,
+    paddingTop: spacing.sm,
+  },
+  codeLabel: {
+    ...typography.micro,
+    color: colors.textMuted,
+  },
+  code: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    textAlign: 'center',
   },
   footer: {
     padding: spacing.md,
