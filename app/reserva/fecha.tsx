@@ -13,10 +13,12 @@ import { getMonthAvailability } from '../../src/data/slots';
 import { useAsync } from '../../src/hooks/useAsync';
 import { useBookingNavigation } from '../../src/hooks/useBookingNavigation';
 import { useRequireBooking } from '../../src/hooks/useRequireBooking';
-import { colors, spacing, typography } from '../../src/theme/tokens';
+import { spacing, typography, type Palette } from '../../src/theme/tokens';
+import { useThemedStyles } from '../../src/theme/useThemedStyles';
 import { currentMonthKey, monthKeyOf } from '../../src/utils/date';
 
 export default function FechaScreen() {
+  const styles = useThemedStyles(makeStyles);
   const router = useRouter();
   const { goBack, changeBarber } = useBookingNavigation();
   const ready = useRequireBooking(['barber']);
@@ -111,7 +113,7 @@ export default function FechaScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: Palette) => StyleSheet.create({
   container: {
     flex: 1,
   },

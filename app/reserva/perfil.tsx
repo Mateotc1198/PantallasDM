@@ -15,7 +15,9 @@ import { getBarberById } from '../../src/data/barbers';
 import { useAsync } from '../../src/hooks/useAsync';
 import { useBookingNavigation } from '../../src/hooks/useBookingNavigation';
 import { useRequireBooking } from '../../src/hooks/useRequireBooking';
-import { colors, spacing, typography } from '../../src/theme/tokens';
+import { spacing, typography, type Palette } from '../../src/theme/tokens';
+import { useTheme } from '../../src/theme/ThemeContext';
+import { useThemedStyles } from '../../src/theme/useThemedStyles';
 import type { Barber } from '../../src/types/api';
 
 const AVATAR_SIZE = 96;
@@ -28,6 +30,8 @@ interface StarsProps {
 
 /** Fila de estrellas llenas según el promedio, redondeado al entero cercano. */
 function Stars({ rating, size }: StarsProps) {
+  const styles = useThemedStyles(makeStyles);
+  const { colors } = useTheme();
   const filled = Math.round(rating);
 
   return (
@@ -37,7 +41,7 @@ function Stars({ rating, size }: StarsProps) {
           key={index}
           name={index < filled ? 'star' : 'star-outline'}
           size={size}
-          color={colors.primary}
+          color={colors.primaryText}
         />
       ))}
     </View>
@@ -45,6 +49,7 @@ function Stars({ rating, size }: StarsProps) {
 }
 
 export default function PerfilScreen() {
+  const styles = useThemedStyles(makeStyles);
   const router = useRouter();
   const { goBack } = useBookingNavigation();
   const ready = useRequireBooking(['barber']);
@@ -125,7 +130,7 @@ export default function PerfilScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: Palette) => StyleSheet.create({
   container: {
     flex: 1,
   },

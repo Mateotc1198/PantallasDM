@@ -5,8 +5,11 @@ import { ImageBackground, Linking, Pressable, StyleSheet, Text, View } from 'rea
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { PrimaryButton } from '../src/components/PrimaryButton';
+import { ThemeToggle } from '../src/components/ThemeToggle';
 import { useBooking } from '../src/context/BookingContext';
-import { colors, radius, spacing, typography } from '../src/theme/tokens';
+import { radius, spacing, typography, type Palette } from '../src/theme/tokens';
+import { useTheme } from '../src/theme/ThemeContext';
+import { useThemedStyles } from '../src/theme/useThemedStyles';
 
 const HERO_IMAGE =
   'https://images.unsplash.com/photo-1503951914875-452162b0f3f1?auto=format&fit=crop&w=1080&q=80';
@@ -15,6 +18,8 @@ const HERO_IMAGE =
 const WHATSAPP_URL = 'https://wa.me/573001112233';
 
 export default function HomeScreen() {
+  const styles = useThemedStyles(makeStyles);
+  const { colors } = useTheme();
   const router = useRouter();
   const { reset } = useBooking();
 
@@ -32,6 +37,15 @@ export default function HomeScreen() {
     <ImageBackground source={{ uri: HERO_IMAGE }} style={styles.hero}>
       <View style={styles.overlay}>
         <SafeAreaView style={styles.safeArea}>
+          {/*
+            El hero es una fotografía oscurecida en los dos temas, así que
+            el icono va en color claro siempre: seguir al tema lo volvería
+            invisible sobre la foto en modo claro.
+          */}
+          <View style={styles.themeToggle}>
+            <ThemeToggle color={colors.heroText} />
+          </View>
+
           <View style={styles.content}>
             <Text style={styles.eyebrow}>— Estilo & Precisión —</Text>
             <Text style={styles.title}>
@@ -84,7 +98,7 @@ export default function HomeScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: Palette) => StyleSheet.create({
   hero: {
     flex: 1,
     backgroundColor: colors.bg,
@@ -95,6 +109,12 @@ const styles = StyleSheet.create({
   },
   safeArea: {
     flex: 1,
+  },
+  themeToggle: {
+    position: 'absolute',
+    top: spacing.sm,
+    right: spacing.md,
+    zIndex: 1,
   },
   content: {
     flex: 1,
@@ -110,7 +130,7 @@ const styles = StyleSheet.create({
   },
   title: {
     ...typography.heroTitle,
-    color: colors.textPrimary,
+    color: colors.heroText,
     textAlign: 'center',
   },
   titleAccent: {
@@ -118,7 +138,7 @@ const styles = StyleSheet.create({
   },
   description: {
     ...typography.body,
-    color: colors.textSecondary,
+    color: colors.heroText,
     textAlign: 'center',
     lineHeight: 21,
   },
@@ -152,7 +172,7 @@ const styles = StyleSheet.create({
   },
   contactLabel: {
     ...typography.caption,
-    color: colors.textSecondary,
+    color: colors.heroTextMuted,
   },
   pressed: {
     opacity: 0.7,

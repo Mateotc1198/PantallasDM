@@ -1,6 +1,7 @@
 import { Image, StyleSheet } from 'react-native';
 
-import { colors } from '../theme/tokens';
+import type { Palette } from '../theme/tokens';
+import { useThemedStyles } from '../theme/useThemedStyles';
 
 interface AvatarProps {
   uri: string;
@@ -11,6 +12,7 @@ interface AvatarProps {
 }
 
 export function Avatar({ uri, size, ring = false }: AvatarProps) {
+  const styles = useThemedStyles(makeStyles);
   return (
     <Image
       source={{ uri }}
@@ -25,7 +27,7 @@ export function Avatar({ uri, size, ring = false }: AvatarProps) {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: Palette) => StyleSheet.create({
   image: {
     backgroundColor: colors.surface,
   },

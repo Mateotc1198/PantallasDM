@@ -1,6 +1,7 @@
 import { Pressable, StyleSheet, Text } from 'react-native';
 
-import { colors, radius, typography } from '../theme/tokens';
+import { radius, typography, type Palette } from '../theme/tokens';
+import { useThemedStyles } from '../theme/useThemedStyles';
 
 interface PrimaryButtonProps {
   label: string;
@@ -18,6 +19,7 @@ export function PrimaryButton({
   loading = false,
   loadingLabel,
 }: PrimaryButtonProps) {
+  const styles = useThemedStyles(makeStyles);
   const inactive = disabled || loading;
   const text = loading ? (loadingLabel ?? label) : label;
 
@@ -38,7 +40,7 @@ export function PrimaryButton({
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: Palette) => StyleSheet.create({
   button: {
     height: 52,
     borderRadius: radius.md,
@@ -54,7 +56,7 @@ const styles = StyleSheet.create({
   },
   label: {
     ...typography.button,
-    color: '#1A1A1A',
+    color: colors.onPrimary,
   },
   labelInactive: {
     color: colors.textMuted,

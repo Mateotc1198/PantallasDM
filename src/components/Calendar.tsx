@@ -2,7 +2,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { colors, radius, spacing, typography } from '../theme/tokens';
+import { radius, spacing, typography, type Palette } from '../theme/tokens';
+import { useTheme } from '../theme/ThemeContext';
+import { useThemedStyles } from '../theme/useThemedStyles';
 import {
   buildMonthGrid,
   compareMonths,
@@ -41,6 +43,8 @@ export function Calendar({
   onSelectDate,
   isDayAvailable,
 }: CalendarProps) {
+  const styles = useThemedStyles(makeStyles);
+  const { colors } = useTheme();
   const visible = useMemo(() => fromMonthKey(month), [month]);
   const weeks = useMemo(() => buildMonthGrid(visible.year, visible.month), [visible]);
 
@@ -134,7 +138,7 @@ export function Calendar({
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: Palette) => StyleSheet.create({
   container: {
     backgroundColor: colors.surface,
     borderRadius: radius.lg,
@@ -191,7 +195,7 @@ const styles = StyleSheet.create({
     fontWeight: '400',
   },
   daySelected: {
-    color: '#1A1A1A',
+    color: colors.onPrimary,
     fontWeight: '700',
   },
 });

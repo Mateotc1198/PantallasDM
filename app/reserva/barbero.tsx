@@ -13,12 +13,16 @@ import { useBooking } from '../../src/context/BookingContext';
 import { getBarbers } from '../../src/data/barbers';
 import { useAsync } from '../../src/hooks/useAsync';
 import { useBookingNavigation } from '../../src/hooks/useBookingNavigation';
-import { colors, spacing, typography } from '../../src/theme/tokens';
+import { spacing, typography, type Palette } from '../../src/theme/tokens';
+import { useTheme } from '../../src/theme/ThemeContext';
+import { useThemedStyles } from '../../src/theme/useThemedStyles';
 import type { BarberSummary } from '../../src/types/api';
 
 const AVATAR_SIZE = 44;
 
 export default function BarberoScreen() {
+  const styles = useThemedStyles(makeStyles);
+  const { colors } = useTheme();
   const router = useRouter();
   const { goBack } = useBookingNavigation();
   const { setBarber } = useBooking();
@@ -64,7 +68,7 @@ export default function BarberoScreen() {
                   {barber.specialty}
                 </Text>
               </View>
-              <Ionicons name="chevron-forward" size={20} color={colors.primary} />
+              <Ionicons name="chevron-forward" size={20} color={colors.primaryText} />
             </View>
           </Card>
         ))}
@@ -73,7 +77,7 @@ export default function BarberoScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: Palette) => StyleSheet.create({
   container: {
     flex: 1,
   },

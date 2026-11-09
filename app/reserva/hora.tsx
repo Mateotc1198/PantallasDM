@@ -13,11 +13,13 @@ import { getSlots } from '../../src/data/slots';
 import { useAsync } from '../../src/hooks/useAsync';
 import { useBookingNavigation } from '../../src/hooks/useBookingNavigation';
 import { useRequireBooking } from '../../src/hooks/useRequireBooking';
-import { colors, spacing, typography } from '../../src/theme/tokens';
+import { spacing, typography, type Palette } from '../../src/theme/tokens';
+import { useThemedStyles } from '../../src/theme/useThemedStyles';
 import type { Slot } from '../../src/types/api';
 import { formatShortDate } from '../../src/utils/date';
 
 export default function HoraScreen() {
+  const styles = useThemedStyles(makeStyles);
   const router = useRouter();
   const { goBack, changeBarber } = useBookingNavigation();
   const ready = useRequireBooking(['barber', 'date']);
@@ -88,7 +90,7 @@ export default function HoraScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: Palette) => StyleSheet.create({
   container: {
     flex: 1,
   },

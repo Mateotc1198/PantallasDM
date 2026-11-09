@@ -1,30 +1,50 @@
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { StyleSheet } from 'react-native';
+import { useMemo } from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { BookingProvider } from '../src/context/BookingContext';
-import { colors } from '../src/theme/tokens';
+import { ThemeProvider, useTheme } from '../src/theme/ThemeContext';
 
 export default function RootLayout() {
   return (
     <SafeAreaProvider>
-      <BookingProvider>
-        <StatusBar style="light" />
-        <Stack
-          screenOptions={{
-            headerShown: false,
-            contentStyle: styles.screen,
-            animation: 'slide_from_right',
-          }}
-        />
-      </BookingProvider>
+      <ThemeProvider>
+        <BookingProvider>
+          <AppShell />
+        </BookingProvider>
+      </ThemeProvider>
     </SafeAreaProvider>
   );
 }
 
-const styles = StyleSheet.create({
-  screen: {
-    backgroundColor: colors.bg,
-  },
-});
+/**
+ * Va separado de RootLayout porque un componente no puede consumir el
+ * contexto que él mismo monta: useTheme tiene que ejecutarse por debajo del
+ * proveedor, no a su lado.
+ */
+function AppShell() {
+  const { name, colors } = useTheme();
+
+  const screenOptions = useMemo(
+    () =>
+      ({
+        headerShown: false,
+        contentStyle: { backgroundColor: colors.bg },
+        animation: 'slide_from_right',
+      }) as const,
+    [colors.bg],
+  );
+
+  return (
+    <>
+      {/*
+        La barra de estado la pinta el sistema y no sabe nada de nuestros
+        colores: hay que decirle si sus iconos van claros u oscuros, o
+        desaparecen contra el fondo al cambiar de tema.
+      */}
+      <StatusBar style={name === 'dark' ? 'light' : 'dark'} />
+      <Stack screenOptions={screenOptions} />
+    </>
+  );
+}

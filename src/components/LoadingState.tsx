@@ -1,6 +1,8 @@
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 
-import { colors, spacing, typography } from '../theme/tokens';
+import { spacing, typography, type Palette } from '../theme/tokens';
+import { useTheme } from '../theme/ThemeContext';
+import { useThemedStyles } from '../theme/useThemedStyles';
 
 interface LoadingStateProps {
   /** Qué se está cargando, en lenguaje de persona. */
@@ -18,9 +20,11 @@ interface LoadingStateProps {
  * respondiera.
  */
 export function LoadingState({ label = 'Cargando...', slow = false }: LoadingStateProps) {
+  const styles = useThemedStyles(makeStyles);
+  const { colors } = useTheme();
   return (
     <View style={styles.container} accessibilityRole="progressbar">
-      <ActivityIndicator size="large" color={colors.primary} />
+      <ActivityIndicator size="large" color={colors.primaryText} />
       <Text style={styles.label}>{label}</Text>
       {slow ? (
         <Text style={styles.hint}>
@@ -31,7 +35,7 @@ export function LoadingState({ label = 'Cargando...', slow = false }: LoadingSta
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: Palette) => StyleSheet.create({
   container: {
     paddingVertical: spacing.xl,
     alignItems: 'center',
