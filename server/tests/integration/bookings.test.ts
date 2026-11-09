@@ -111,9 +111,10 @@ describe('POST /api/v1/bookings', () => {
   });
 
   it('devuelve 422 si el barbero no atiende ese día', async () => {
+    // alexander-escobar descansa los domingos; luis-gomez no.
     const response = await request(app)
       .post('/api/v1/bookings')
-      .send(validPayload({ date: futureSunday() }));
+      .send(validPayload({ barberId: 'alexander-escobar', date: futureSunday() }));
 
     expect(response.status).toBe(422);
     expect(response.body.error.code).toBe('BARBER_CLOSED_THAT_DAY');

@@ -24,15 +24,15 @@ export async function closeDatabase(): Promise<void> {
  * montar el escenario serían veintidós formas de que falle algo que no es el
  * objeto del test.
  *
- * El generate_series reproduce el horario del seed: de 09:00 a 19:30 cada 30
- * minutos, veintidós franjas.
+ * El generate_series reproduce el horario del seed: de 09:00 a 20:30 cada 30
+ * minutos, veinticuatro franjas.
  */
 export async function fillDay(barberId: string, date: string): Promise<void> {
   await pool.query(
     `INSERT INTO bookings (barber_id, booking_date, booking_time, customer_name, customer_phone)
      SELECT $1, $2::date, (TIME '09:00' + (n * INTERVAL '30 minutes'))::time,
             'Cliente Lleno', '3001112233'
-     FROM generate_series(0, 21) AS n`,
+     FROM generate_series(0, 23) AS n`,
     [barberId, date],
   );
 }

@@ -16,7 +16,13 @@ function shiftDays(days: number): Date {
   return date;
 }
 
-/** Fecha futura en la que el barbero SÍ atiende (lunes a sábado). */
+/**
+ * Fecha futura en la que atienden TODOS los barberos.
+ *
+ * Evita el domingo a propósito: la mayoría trabaja ese día, pero
+ * alexander-escobar descansa, y un helper que a veces cae en su día libre
+ * haría fallar tests que no tienen nada que ver con los horarios.
+ */
 export function futureOpenDate(daysAhead = 7): string {
   const date = shiftDays(daysAhead);
   if (date.getDay() === 0) {
@@ -25,7 +31,7 @@ export function futureOpenDate(daysAhead = 7): string {
   return toISO(date);
 }
 
-/** Próximo domingo futuro: el día que la barbería cierra. */
+/** Próximo domingo: el día que descansa alexander-escobar. */
 export function futureSunday(): string {
   const date = shiftDays(1);
   while (date.getDay() !== 0) {
@@ -55,7 +61,7 @@ export function pastMonth(): string {
   return toISO(date).slice(0, 7);
 }
 
-/** Un día del mes siguiente en el que el barbero atiende (nunca domingo). */
+/** Un día del mes siguiente en el que atienden todos (nunca domingo). */
 export function openDayInFutureMonth(): string {
   const date = new Date();
   date.setDate(1);

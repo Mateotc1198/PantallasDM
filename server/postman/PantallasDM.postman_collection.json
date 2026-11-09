@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "PantallasDM API v1",
-    "description": "API de reservas de barbería.\n\nCómo usarla:\n1. Levanta la base: `docker compose up -d`\n2. Prepara los datos: `npm run db:setup`\n3. Arranca la API: `npm run dev`\n4. Importa también el environment `PantallasDM.postman_environment.json` y selecciónalo arriba a la derecha.\n5. Ejecuta la colección completa con el Collection Runner: las peticiones están ordenadas y se encadenan solas.\n\nLa fecha de prueba se calcula sola en cada ejecución (siempre futura y nunca domingo), así que la colección no caduca.",
+    "description": "API de reservas de barbería.\n\nCómo usarla:\n1. Levanta la base: `docker compose up -d`\n2. Prepara los datos: `npm run db:setup`\n3. Arranca la API: `npm run dev`\n4. Importa también el environment `PantallasDM.postman_environment.json` y selecciónalo arriba a la derecha.\n5. Ejecuta la colección completa con el Collection Runner: las peticiones están ordenadas y se encadenan solas.\n\nLa fecha y el mes de prueba se calculan solos en cada ejecución (siempre futuros), así que la colección no caduca.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "event": [
@@ -10,15 +10,25 @@
       "script": {
         "type": "text/javascript",
         "exec": [
-          "// Fecha futura que nunca cae en domingo (el barbero no atiende).",
+          "// Fecha futura que nunca cae en domingo. La mayoria de los barberos",
+          "// atiende ese dia, pero alexander-escobar descansa, asi que se evita para",
+          "// que la coleccion valga con cualquier barberId.",
           "// Se recalcula en cada ejecucion: la coleccion no caduca con el tiempo.",
+          "const pad = (valor) => String(valor).padStart(2, '0');",
+          "",
           "const fecha = new Date();",
           "fecha.setDate(fecha.getDate() + 7);",
           "if (fecha.getDay() === 0) {",
           "    fecha.setDate(fecha.getDate() + 1);",
           "}",
-          "const pad = (valor) => String(valor).padStart(2, '0');",
-          "pm.environment.set('fecha', `${fecha.getFullYear()}-${pad(fecha.getMonth() + 1)}-${pad(fecha.getDate())}`);"
+          "pm.environment.set('fecha', `${fecha.getFullYear()}-${pad(fecha.getMonth() + 1)}-${pad(fecha.getDate())}`);",
+          "",
+          "// Mes siguiente completo: todos sus dias estan por delante, asi que la",
+          "// disponibilidad mensual nunca sale vacia por el paso del tiempo.",
+          "const mes = new Date();",
+          "mes.setDate(1);",
+          "mes.setMonth(mes.getMonth() + 1);",
+          "pm.environment.set('mes', `${mes.getFullYear()}-${pad(mes.getMonth() + 1)}`);"
         ]
       }
     }
@@ -465,10 +475,10 @@
                   "",
                   "const slots = pm.response.json();",
                   "",
-                  "pm.test('devuelve las 22 franjas de 9:00 a 19:30', () => {",
-                  "    pm.expect(slots).to.have.lengthOf(22);",
+                  "pm.test('devuelve las 24 franjas de 9:00 a 20:30', () => {",
+                  "    pm.expect(slots).to.have.lengthOf(24);",
                   "    pm.expect(slots[0].time).to.eql('09:00');",
-                  "    pm.expect(slots[slots.length - 1].time).to.eql('19:30');",
+                  "    pm.expect(slots[slots.length - 1].time).to.eql('20:30');",
                   "});",
                   "",
                   "pm.test('cada franja tiene estado libre u ocupado', () => {",
@@ -559,6 +569,103 @@
             }
           ],
           "response": []
+        },
+        {
+          "name": "12. Disponibilidad del mes",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/barbers/{{barberId}}/availability?month={{mes}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "barbers",
+                "{{barberId}}",
+                "availability"
+              ],
+              "query": [
+                {
+                  "key": "month",
+                  "value": "{{mes}}"
+                }
+              ]
+            },
+            "description": "Días del mes con al menos una franja libre. Existe para que un calendario resuelva el mes entero con una sola petición: pintar 42 celdas preguntando día por día serían 42 peticiones para dibujar una pantalla."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "",
+                  "const cuerpo = pm.response.json();",
+                  "",
+                  "pm.test('devuelve el mes consultado', () => {",
+                  "    pm.expect(cuerpo.month).to.eql(pm.environment.get('mes'));",
+                  "});",
+                  "",
+                  "pm.test('hay dias con cupo y todos son de ese mes', () => {",
+                  "    pm.expect(cuerpo.days).to.be.an('array').that.is.not.empty;",
+                  "    cuerpo.days.forEach((dia) => pm.expect(dia.startsWith(cuerpo.month)).to.be.true);",
+                  "});",
+                  "",
+                  "pm.test('las fechas vienen en orden ascendente', () => {",
+                  "    pm.expect(cuerpo.days).to.eql([...cuerpo.days].sort());",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "13. Disponibilidad con mes invalido (400)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/barbers/{{barberId}}/availability?month=2026-13",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "barbers",
+                "{{barberId}}",
+                "availability"
+              ],
+              "query": [
+                {
+                  "key": "month",
+                  "value": "2026-13"
+                }
+              ]
+            },
+            "description": "El mes 13 no existe. La validación de forma ocurre en el borde HTTP con zod, antes de tocar la base de datos."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400 Bad Request', () => pm.response.to.have.status(400));",
+                  "",
+                  "pm.test('el error identifica la validacion', () => {",
+                  "    pm.expect(pm.response.json().error.code).to.eql('VALIDATION_ERROR');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
         }
       ]
     },
@@ -566,7 +673,7 @@
       "name": "Citas",
       "item": [
         {
-          "name": "12. Crear cita",
+          "name": "14. Crear cita",
           "request": {
             "method": "POST",
             "header": [
@@ -684,7 +791,7 @@
           ]
         },
         {
-          "name": "13. Crear cita duplicada (409)",
+          "name": "15. Crear cita duplicada (409)",
           "request": {
             "method": "POST",
             "header": [
@@ -771,7 +878,7 @@
           ]
         },
         {
-          "name": "14. Crear cita con datos invalidos (400)",
+          "name": "16. Crear cita con datos invalidos (400)",
           "request": {
             "method": "POST",
             "header": [
@@ -821,7 +928,7 @@
           "response": []
         },
         {
-          "name": "15. Crear cita fuera de franja (422)",
+          "name": "17. Crear cita fuera de franja (422)",
           "request": {
             "method": "POST",
             "header": [
@@ -869,7 +976,7 @@
           "response": []
         },
         {
-          "name": "16. Obtener cita por id",
+          "name": "18. Obtener cita por id",
           "request": {
             "method": "GET",
             "header": [],
@@ -904,7 +1011,7 @@
           "response": []
         },
         {
-          "name": "17. Cancelar cita",
+          "name": "19. Cancelar cita",
           "request": {
             "method": "DELETE",
             "header": [
@@ -944,7 +1051,7 @@
           "response": []
         },
         {
-          "name": "18. Cancelar cita ya cancelada (409)",
+          "name": "20. Cancelar cita ya cancelada (409)",
           "request": {
             "method": "DELETE",
             "header": [
@@ -984,7 +1091,7 @@
           "response": []
         },
         {
-          "name": "19. Cita inexistente (404)",
+          "name": "21. Cita inexistente (404)",
           "request": {
             "method": "GET",
             "header": [],
@@ -1019,7 +1126,7 @@
           "response": []
         },
         {
-          "name": "20. Agenda completa (admin)",
+          "name": "22. Agenda completa (admin)",
           "request": {
             "method": "GET",
             "header": [
@@ -1058,7 +1165,7 @@
           "response": []
         },
         {
-          "name": "21. Agenda propia (barbero)",
+          "name": "23. Agenda propia (barbero)",
           "request": {
             "method": "GET",
             "header": [
@@ -1099,7 +1206,7 @@
           "response": []
         },
         {
-          "name": "22. Agenda sin token (401)",
+          "name": "24. Agenda sin token (401)",
           "request": {
             "method": "GET",
             "header": [],

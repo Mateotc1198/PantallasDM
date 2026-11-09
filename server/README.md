@@ -335,10 +335,14 @@ Tres decisiones que conviene entender:
 
 **Las franjas horarias no se almacenan.** Guardar cada media hora de cada día
 futuro serían miles de filas que caducan solas. `barber_schedules` guarda la
-regla ("los martes de 9:00 a 19:30 en bloques de 30 min") y el servicio genera
-las franjas al vuelo cruzándolas con las citas activas. La ausencia de fila para
-un día significa que ese día no se atiende: "domingo cerrado" es un dato, no
-código.
+regla ("los martes de 9:00 a 20:30 en bloques de 30 min") y el servicio genera
+las franjas al vuelo cruzándolas con las citas activas. `last_slot_at` es la
+última franja reservable, no la hora de cierre: la cita de las 20:30 termina a
+las 21:00, que es cuando cierra el local.
+
+La ausencia de fila para un día significa que ese barbero no atiende ese día.
+Así "Alexander descansa los domingos" es un dato y no código, y cada barbero
+puede tener su propio horario sin tocar una sola línea.
 
 **`rating` y `reviewsCount` no son columnas**, se agregan desde `reviews` con
 `AVG` y `COUNT`. Evita que el promedio quede mintiendo al borrar una reseña.
@@ -367,8 +371,8 @@ environment arriba a la derecha.
 
 La colección se ejecuta entera de corrido con el Collection Runner:
 
-- La fecha de prueba **se calcula sola** en cada ejecución (siempre futura, nunca
-  domingo), así que la colección no caduca.
+- La fecha y el mes de prueba **se calculan solos** en cada ejecución (siempre
+  futuros), así que la colección no caduca.
 - `POST /bookings` **guarda el id** de la cita creada en una variable, y las
   peticiones siguientes lo reutilizan: no hay que copiar ids a mano.
 - El login **guarda el token** en una variable y las peticiones protegidas lo
