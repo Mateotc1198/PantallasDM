@@ -115,23 +115,25 @@ describe('GET /api/v1/barbers/:id/slots', () => {
 
   it('devuelve 200 con lista vacía el día que el barbero no atiende', async () => {
     // Un día cerrado no es un error: es una pregunta válida sin resultados.
+    // El domingo lo descansa alexander-escobar, no la barbería entera.
     const response = await request(app)
-      .get('/api/v1/barbers/luis-gomez/slots')
+      .get('/api/v1/barbers/alexander-escobar/slots')
       .query({ date: futureSunday() });
 
     expect(response.status).toBe(200);
     expect(response.body).toEqual([]);
   });
 
-  it('devuelve las 22 franjas de un día hábil, todas libres', async () => {
+  it('devuelve las 24 franjas de un día hábil, todas libres', async () => {
     const response = await request(app)
       .get('/api/v1/barbers/luis-gomez/slots')
       .query({ date: futureOpenDate() });
 
     expect(response.status).toBe(200);
-    expect(response.body).toHaveLength(22);
+    expect(response.body).toHaveLength(24);
     expect(response.body[0].time).toBe('09:00');
-    expect(response.body.at(-1).time).toBe('19:30');
+    // La última franja reservable, no la hora de cierre: esa cita acaba a las 21:00.
+    expect(response.body.at(-1).time).toBe('20:30');
     expect(response.body.every((slot: { status: string }) => slot.status === 'libre')).toBe(true);
   });
 
@@ -207,8 +209,17 @@ describe('GET /api/v1/barbers/:id/availability', () => {
     }
   });
 
-  it('no incluye domingos: ese día la barbería no abre', async () => {
+  it('incluye los domingos de quien atiende los siete días', async () => {
     const response = await pedirMes(BARBERO, futureMonth());
+    const domingos = (response.body.days as string[]).filter((day) => weekdayOf(day) === 0);
+
+    expect(domingos.length).toBeGreaterThan(0);
+  });
+
+  it('excluye los domingos de quien ese día descansa', async () => {
+    // La prueba de que el horario es dato por barbero y no una constante de
+    // la barbería: misma consulta, mismo mes, respuesta distinta.
+    const response = await pedirMes('alexander-escobar', futureMonth());
     const domingos = (response.body.days as string[]).filter((day) => weekdayOf(day) === 0);
 
     expect(domingos).toEqual([]);
