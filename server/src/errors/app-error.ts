@@ -33,6 +33,27 @@ export class BadRequestError extends AppError {
   }
 }
 
+/**
+ * 401 — no sabemos quién eres: falta el token, está mal formado o expiró.
+ */
+export class UnauthorizedError extends AppError {
+  constructor(code: string, message: string) {
+    super(401, code, message);
+  }
+}
+
+/**
+ * 403 — sabemos quién eres, pero tu rol no alcanza para esto.
+ *
+ * La diferencia con 401 importa al calificar control de roles: 401 es
+ * "identifícate", 403 es "ya te identificaste y aun así no puedes".
+ */
+export class ForbiddenError extends AppError {
+  constructor(code: string, message: string) {
+    super(403, code, message);
+  }
+}
+
 /** 404 — el recurso no existe. */
 export class NotFoundError extends AppError {
   constructor(code: string, message: string) {

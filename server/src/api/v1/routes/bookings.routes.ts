@@ -2,6 +2,8 @@ import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
 
 import { env } from '../../../config/env.js';
+import { authenticate } from '../../../middleware/authenticate.js';
+import { authorize } from '../../../middleware/authorize.js';
 import { ERROR_CODES } from '../../../errors/codes.js';
 import type { ApiErrorBody } from '../../../types/api.js';
 import * as bookingsController from '../controllers/bookings.controller.js';
@@ -31,8 +33,16 @@ const createBookingLimiter = rateLimit({
 
 const router = Router();
 
+// Agenda del panel: solo con sesión iniciada.
+router.get('/', authenticate, authorize('admin', 'barbero'), bookingsController.list);
+
+// Reservar es público: el cliente no necesita cuenta, como en el diseño.
 router.post('/', createBookingLimiter, bookingsController.create);
+
+// El recibo del cliente. Público, protegido por un UUID no adivinable.
 router.get('/:id', bookingsController.getById);
-router.delete('/:id', bookingsController.cancel);
+
+// Cancelar sí exige sesión. Dentro, el servicio comprueba que la cita sea tuya.
+router.delete('/:id', authenticate, authorize('admin', 'barbero'), bookingsController.cancel);
 
 export default router;

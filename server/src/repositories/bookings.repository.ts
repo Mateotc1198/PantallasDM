@@ -112,6 +112,30 @@ export async function findActiveTimes(barberId: string, date: string): Promise<s
  * simultáneas: la segunda no encuentra fila que actualizar y devuelve null,
  * en vez de sobrescribir la fecha de cancelación de la primera.
  */
+/**
+ * Agenda: citas activas, con filtros opcionales por día y por barbero.
+ *
+ * Los filtros se resuelven dentro del SQL con "$1 IS NULL OR ..." en vez de
+ * ir concatenando trozos de consulta según los parámetros recibidos. Así la
+ * consulta es siempre la misma, siempre parametrizada, y no hay por dónde
+ * inyectar nada.
+ */
+export async function findAgenda(filtros: {
+  date: string | null;
+  barberId: string | null;
+}): Promise<Booking[]> {
+  const rows = await query<BookingRow>(
+    `SELECT ${RETURNING_COLUMNS}
+     FROM bookings
+     WHERE status = 'activa'
+       AND ($1::date IS NULL OR booking_date = $1::date)
+       AND ($2::text IS NULL OR barber_id = $2::text)
+     ORDER BY booking_date, booking_time`,
+    [filtros.date, filtros.barberId],
+  );
+  return rows.map(toBooking);
+}
+
 export async function cancel(id: string): Promise<Booking | null> {
   const rows = await query<BookingRow>(
     `UPDATE bookings

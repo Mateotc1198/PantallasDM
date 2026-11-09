@@ -75,6 +75,34 @@ export interface Booking {
 /** Cuerpo de POST /bookings: id, status y createdAt los pone el servidor. */
 export type CreateBookingInput = Omit<Booking, 'id' | 'status' | 'createdAt'>;
 
+/**
+ * Rol de una cuenta.
+ *
+ * admin   gestiona toda la agenda de la barbería
+ * barbero entra al mismo panel, pero solo ve y cancela SUS citas
+ */
+export type UserRole = 'admin' | 'barbero';
+
+/**
+ * Identidad que viaja en el token y que la API expone.
+ * Nunca incluye el hash de la contraseña.
+ */
+export interface AuthUser {
+  id: string;
+  username: string;
+  role: UserRole;
+  /** Ficha de barbero que gestiona. null para los administradores. */
+  barberId: string | null;
+}
+
+/** Respuesta de POST /auth/login */
+export interface LoginResponse {
+  token: string;
+  /** Segundos que dura el token, para que el cliente sepa cuándo renovar. */
+  expiresIn: number;
+  user: AuthUser;
+}
+
 /** Forma única de todas las respuestas de error de la API. */
 export interface ApiErrorBody {
   error: {
