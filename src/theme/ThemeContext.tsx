@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Appearance } from 'react-native';
 import {
   createContext,
   useCallback,
@@ -72,6 +73,16 @@ export function ThemeProvider({ children }: PropsWithChildren) {
   const toggle = useCallback(() => {
     setTheme(name === 'dark' ? 'light' : 'dark');
   }, [name, setTheme]);
+
+  /**
+   * El teclado, los diálogos de Alert y las barras de desplazamiento los
+   * pinta el sistema, no nosotros: hay que decirle en qué modo estamos o
+   * seguirían oscuros con la aplicación en claro. Va junto con
+   * userInterfaceStyle "automatic" en app.json.
+   */
+  useEffect(() => {
+    Appearance.setColorScheme(name);
+  }, [name]);
 
   const value = useMemo<ThemeContextValue>(
     () => ({ name, colors: palettes[name], toggle, setTheme }),

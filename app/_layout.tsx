@@ -5,6 +5,7 @@ import { StyleSheet, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { ThemeToggle } from '../src/components/ThemeToggle';
+import { AuthProvider } from '../src/context/AuthContext';
 import { BookingProvider } from '../src/context/BookingContext';
 import { ThemeProvider, useTheme } from '../src/theme/ThemeContext';
 
@@ -12,9 +13,11 @@ export default function RootLayout() {
   return (
     <SafeAreaProvider>
       <ThemeProvider>
-        <BookingProvider>
-          <AppShell />
-        </BookingProvider>
+        <AuthProvider>
+          <BookingProvider>
+            <AppShell />
+          </BookingProvider>
+        </AuthProvider>
       </ThemeProvider>
     </SafeAreaProvider>
   );

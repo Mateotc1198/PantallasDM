@@ -34,6 +34,13 @@ interface CalendarProps {
   onSelectDate: (date: string) => void;
   /** La pantalla decide qué día tiene cupo; el calendario solo lo pinta. */
   isDayAvailable: (date: string) => boolean;
+  /**
+   * Permite elegir días ya pasados y retroceder de mes.
+   *
+   * Reservar mira hacia delante, pero una agenda mira hacia atrás: el
+   * administrador necesita consultar qué citas hubo ayer.
+   */
+  allowPast?: boolean;
 }
 
 export function Calendar({
@@ -42,14 +49,16 @@ export function Calendar({
   selectedDate,
   onSelectDate,
   isDayAvailable,
+  allowPast = false,
 }: CalendarProps) {
   const styles = useThemedStyles(makeStyles);
   const { colors } = useTheme();
   const visible = useMemo(() => fromMonthKey(month), [month]);
   const weeks = useMemo(() => buildMonthGrid(visible.year, visible.month), [visible]);
 
-  // No se navega a meses ya pasados: no hay nada reservable ahí.
-  const canGoBack = compareMonths(visible, fromMonthKey(currentMonthKey())) > 0;
+  // Reservando no se navega a meses pasados porque no hay nada que tomar
+  // ahí; consultando la agenda, sí.
+  const canGoBack = allowPast || compareMonths(visible, fromMonthKey(currentMonthKey())) > 0;
 
   const goToPreviousMonth = () => {
     const anterior = shiftMonth(visible.year, visible.month, -1);
@@ -104,7 +113,7 @@ export function Calendar({
               return <View key={`vacio-${weekIndex}-${dayIndex}`} style={styles.cell} />;
             }
 
-            const disabled = isPastDate(iso) || !isDayAvailable(iso);
+            const disabled = (!allowPast && isPastDate(iso)) || !isDayAvailable(iso);
             const selected = iso === selectedDate;
             const dayNumber = fromISODate(iso).getDate();
 

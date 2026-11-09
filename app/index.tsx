@@ -32,6 +32,10 @@ export default function HomeScreen() {
     void Linking.openURL(WHATSAPP_URL);
   }, []);
 
+  const openAdmin = useCallback(() => {
+    router.push('/admin');
+  }, [router]);
+
   return (
     <ImageBackground source={{ uri: HERO_IMAGE }} style={styles.hero}>
       <View style={styles.overlay}>
@@ -62,6 +66,22 @@ export default function HomeScreen() {
                 </Pressable>
               </View>
             </View>
+
+            {/*
+              Acceso al panel. Discreto a propósito: esta es la pantalla de
+              un cliente, no del dueño. Pero visible, porque esconderlo
+              detrás de un gesto secreto significa que quien tenga que
+              revisar la aplicación no lo encuentra.
+            */}
+            <Pressable
+              onPress={openAdmin}
+              accessibilityRole="button"
+              accessibilityLabel="Acceder al panel de administración"
+              style={({ pressed }) => [styles.admin, pressed && styles.pressed]}
+            >
+              <Ionicons name="lock-closed-outline" size={12} color={colors.heroTextMuted} />
+              <Text style={styles.adminLabel}>Administración</Text>
+            </Pressable>
 
             {/* TODO: sección de contacto pendiente de diseño. */}
             <Pressable
@@ -156,6 +176,16 @@ const makeStyles = (colors: Palette) => StyleSheet.create({
   },
   contactLabel: {
     ...typography.caption,
+    color: colors.heroTextMuted,
+  },
+  admin: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    paddingTop: spacing.sm,
+  },
+  adminLabel: {
+    ...typography.meta,
     color: colors.heroTextMuted,
   },
   pressed: {
