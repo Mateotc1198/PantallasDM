@@ -5,7 +5,6 @@ import { ImageBackground, Linking, Pressable, StyleSheet, Text, View } from 'rea
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { PrimaryButton } from '../src/components/PrimaryButton';
-import { ThemeToggle } from '../src/components/ThemeToggle';
 import { useBooking } from '../src/context/BookingContext';
 import { radius, spacing, typography, type Palette } from '../src/theme/tokens';
 import { useTheme } from '../src/theme/ThemeContext';
@@ -37,15 +36,6 @@ export default function HomeScreen() {
     <ImageBackground source={{ uri: HERO_IMAGE }} style={styles.hero}>
       <View style={styles.overlay}>
         <SafeAreaView style={styles.safeArea}>
-          {/*
-            El hero es una fotografía oscurecida en los dos temas, así que
-            el icono va en color claro siempre: seguir al tema lo volvería
-            invisible sobre la foto en modo claro.
-          */}
-          <View style={styles.themeToggle}>
-            <ThemeToggle color={colors.heroText} />
-          </View>
-
           <View style={styles.content}>
             <Text style={styles.eyebrow}>— Estilo & Precisión —</Text>
             <Text style={styles.title}>
@@ -80,7 +70,7 @@ export default function HomeScreen() {
               style={({ pressed }) => [styles.contact, pressed && styles.pressed]}
             >
               <Text style={styles.contactLabel}>Contáctanos</Text>
-              <Ionicons name="chevron-down" size={14} color={colors.textSecondary} />
+              <Ionicons name="chevron-down" size={14} color={colors.heroTextMuted} />
             </Pressable>
           </View>
 
@@ -90,7 +80,7 @@ export default function HomeScreen() {
             accessibilityLabel="Escribir por WhatsApp"
             style={({ pressed }) => [styles.fab, pressed && styles.pressed]}
           >
-            <Ionicons name="logo-whatsapp" size={28} color={colors.textPrimary} />
+            <Ionicons name="logo-whatsapp" size={28} color={colors.heroText} />
           </Pressable>
         </SafeAreaView>
       </View>
@@ -109,12 +99,6 @@ const makeStyles = (colors: Palette) => StyleSheet.create({
   },
   safeArea: {
     flex: 1,
-  },
-  themeToggle: {
-    position: 'absolute',
-    top: spacing.sm,
-    right: spacing.md,
-    zIndex: 1,
   },
   content: {
     flex: 1,

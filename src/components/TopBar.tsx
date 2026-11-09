@@ -2,7 +2,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { fontFamily, spacing, type Palette } from '../theme/tokens';
-import { ThemeToggle } from './ThemeToggle';
 import { useTheme } from '../theme/ThemeContext';
 import { useThemedStyles } from '../theme/useThemedStyles';
 
@@ -25,9 +24,6 @@ export function TopBar({ onClose }: TopBarProps) {
         <Ionicons name="close" size={22} color={colors.textSecondary} />
       </Pressable>
       <Text style={styles.brand}>ZonaBarber</Text>
-      <View style={styles.themeToggle}>
-        <ThemeToggle />
-      </View>
     </View>
   );
 }
@@ -45,10 +41,6 @@ const makeStyles = (colors: Palette) => StyleSheet.create({
     position: 'absolute',
     left: spacing.md,
     padding: spacing.xs,
-  },
-  themeToggle: {
-    position: 'absolute',
-    right: spacing.md,
   },
   pressed: {
     opacity: 0.6,

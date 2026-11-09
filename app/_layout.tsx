@@ -1,8 +1,10 @@
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useMemo } from 'react';
+import { StyleSheet, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
+import { ThemeToggle } from '../src/components/ThemeToggle';
 import { BookingProvider } from '../src/context/BookingContext';
 import { ThemeProvider, useTheme } from '../src/theme/ThemeContext';
 
@@ -37,7 +39,7 @@ function AppShell() {
   );
 
   return (
-    <>
+    <View style={styles.root}>
       {/*
         La barra de estado la pinta el sistema y no sabe nada de nuestros
         colores: hay que decirle si sus iconos van claros u oscuros, o
@@ -45,6 +47,18 @@ function AppShell() {
       */}
       <StatusBar style={name === 'dark' ? 'light' : 'dark'} />
       <Stack screenOptions={screenOptions} />
-    </>
+      {/*
+        Fuera del Stack y después de él: así queda por encima de cualquier
+        pantalla, sobrevive a las transiciones sin animarse con ellas, y las
+        pantallas que todavía no existen lo tendrán sin hacer nada.
+      */}
+      <ThemeToggle />
+    </View>
   );
 }
+
+const styles = StyleSheet.create({
+  root: {
+    flex: 1,
+  },
+});
