@@ -45,6 +45,36 @@ function resolveBaseUrl(): string {
 
 export const API_BASE_URL = resolveBaseUrl();
 
+/**
+ * Token de la sesión activa.
+ *
+ * Vive aquí, en el módulo, y no se pasa por parámetro a cada llamada: si
+ * cada función de src/data/ tuviera que recibirlo, la firma de todas ellas
+ * dependería de la autenticación y las pantallas tendrían que acarrearlo.
+ * El contexto de sesión lo deposita al entrar y lo borra al salir.
+ */
+let authToken: string | null = null;
+
+/** Lo llama AuthContext: null al cerrar sesión. */
+export function setAuthToken(token: string | null): void {
+  authToken = token;
+}
+
+type ManejadorNoAutorizado = () => void;
+
+let alPerderLaSesion: ManejadorNoAutorizado | null = null;
+
+/**
+ * Qué hacer cuando el servidor rechaza un token que creíamos válido.
+ *
+ * El token dura ocho horas; cuando caduca, todas las peticiones empiezan a
+ * responder 401 y el usuario se queda mirando errores sin entender por qué.
+ * Esto permite que la sesión se cierre sola y lo devuelva al login.
+ */
+export function setUnauthorizedHandler(manejador: ManejadorNoAutorizado | null): void {
+  alPerderLaSesion = manejador;
+}
+
 /** Códigos que genera el cliente, no el servidor. */
 export const CLIENT_ERROR_CODES = {
   NETWORK: 'NETWORK_ERROR',
@@ -136,6 +166,10 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const controlador = new AbortController();
   const temporizador = setTimeout(() => controlador.abort(), TIMEOUT_MS);
 
+  // Se recuerda si ESTA petición llevaba token: el 401 del propio login
+  // (credenciales equivocadas) no debe cerrar una sesión que no existe.
+  const conToken = authToken !== null;
+
   let response: Response;
   try {
     response = await fetch(`${API_BASE_URL}${path}`, {
@@ -144,6 +178,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
       headers: {
         Accept: 'application/json',
         ...(init?.body === undefined ? {} : { 'Content-Type': 'application/json' }),
+        ...(conToken ? { Authorization: `Bearer ${authToken}` } : {}),
         ...init?.headers,
       },
     });
@@ -174,6 +209,12 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
   if (!response.ok) {
     const detalle = esCuerpoDeError(cuerpo) ? cuerpo.error : null;
+
+    // Mandamos un token y lo rechazaron: caducó o lo revocaron. No tiene
+    // sentido seguir intentando con él.
+    if (response.status === 401 && conToken) {
+      alPerderLaSesion?.();
+    }
     throw new ApiError(
       detalle?.message ?? MENSAJES_POR_ESTADO[response.status] ?? 'Error del servidor.',
       response.status,
