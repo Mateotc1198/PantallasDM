@@ -1,0 +1,21 @@
+{
+  // Este archivo no existe para compilar nada: existe para detener la
+  // búsqueda de tsconfig.
+  //
+  // El backend es un proyecto anidado dentro de una aplicación de Expo. Las
+  // herramientas que transforman TypeScript buscan el tsconfig más cercano
+  // y, si no encaja, siguen subiendo por el árbol de carpetas. Como
+  // ../tsconfig.json solo incluye src/**, un archivo de tests no encajaba y
+  // la búsqueda llegaba hasta el tsconfig de la raíz, que extiende
+  // "expo/tsconfig.base".
+  //
+  // En local eso se resuelve sin ruido porque las dependencias de la app
+  // están instaladas. En integración continua el trabajo de la API solo
+  // instala server/, así que el paquete expo no existe y la transformación
+  // fallaba con "Tsconfig not found" antes de ejecutar un solo test.
+  //
+  // Con este archivo, cualquier .ts bajo tests/ encuentra una configuración
+  // válida en su propia carpeta y la búsqueda nunca sale del backend.
+  "extends": "../tsconfig.test.json",
+  "include": ["**/*.ts"]
+}
