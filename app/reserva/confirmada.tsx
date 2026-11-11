@@ -6,6 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Card } from '../../src/components/Card';
 import { PrimaryButton } from '../../src/components/PrimaryButton';
 import { SummaryRow } from '../../src/components/SummaryRow';
+import { enlaceWhatsAppLibre } from '../../src/config/barberia';
 import { useBooking } from '../../src/context/BookingContext';
 import { useBookingNavigation } from '../../src/hooks/useBookingNavigation';
 import { useRequireBooking } from '../../src/hooks/useRequireBooking';
@@ -73,7 +74,7 @@ export default function ConfirmadaScreen() {
           <Pressable
             onPress={() => {
               const texto = `Mi cita en ZonaBarber: ${formatDayMonthYear(booking.date)} a las ${formatTime12h(booking.time)}. Código: ${booking.id}`;
-              void Linking.openURL(`https://wa.me/?text=${encodeURIComponent(texto)}`);
+              void Linking.openURL(enlaceWhatsAppLibre(texto));
             }}
             accessibilityRole="button"
             accessibilityLabel="Enviarme el código por WhatsApp"

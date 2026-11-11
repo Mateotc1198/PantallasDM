@@ -5,6 +5,7 @@ import { ImageBackground, Linking, Pressable, StyleSheet, Text, View } from 'rea
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { PrimaryButton } from '../src/components/PrimaryButton';
+import { enlaceWhatsApp } from '../src/config/barberia';
 import { useBooking } from '../src/context/BookingContext';
 import { radius, spacing, typography, type Palette } from '../src/theme/tokens';
 import { useTheme } from '../src/theme/ThemeContext';
@@ -12,9 +13,6 @@ import { useThemedStyles } from '../src/theme/useThemedStyles';
 
 const HERO_IMAGE =
   'https://images.unsplash.com/photo-1503951914875-452162b0f3f1?auto=format&fit=crop&w=1080&q=80';
-
-// TODO: reemplazar por el número real de la barbería cuando exista el backend.
-const WHATSAPP_URL = 'https://wa.me/573001112233';
 
 export default function HomeScreen() {
   const styles = useThemedStyles(makeStyles);
@@ -29,8 +27,16 @@ export default function HomeScreen() {
   }, [reset, router]);
 
   const openWhatsApp = useCallback(() => {
-    void Linking.openURL(WHATSAPP_URL);
+    void Linking.openURL(enlaceWhatsApp('Hola, quiero agendar una cita.'));
   }, []);
+
+  const openServicios = useCallback(() => {
+    router.push('/servicios');
+  }, [router]);
+
+  const openContacto = useCallback(() => {
+    router.push('/contacto');
+  }, [router]);
 
   const openAdmin = useCallback(() => {
     router.push('/admin');
@@ -60,10 +66,10 @@ export default function HomeScreen() {
                 <PrimaryButton label="Agendar Cita" onPress={startBooking} />
               </View>
               <View style={styles.actionSlot}>
-                {/* TODO: catálogo de servicios pendiente de diseño. */}
                 <Pressable
-                  onPress={() => undefined}
+                  onPress={openServicios}
                   accessibilityRole="button"
+                  accessibilityLabel="Ver nuestros servicios"
                   style={({ pressed }) => [styles.secondary, pressed && styles.pressed]}
                 >
                   <Text style={styles.secondaryLabel}>Ver Servicios</Text>
@@ -102,14 +108,16 @@ export default function HomeScreen() {
               <Text style={styles.adminLabel}>Administración</Text>
             </Pressable>
 
-            {/* TODO: sección de contacto pendiente de diseño. */}
             <Pressable
-              onPress={() => undefined}
+              onPress={openContacto}
               accessibilityRole="button"
+              accessibilityLabel="Ver los datos de contacto"
               style={({ pressed }) => [styles.contact, pressed && styles.pressed]}
             >
               <Text style={styles.contactLabel}>Contáctanos</Text>
-              <Ionicons name="chevron-down" size={14} color={colors.heroTextMuted} />
+              {/* Lleva a otra pantalla, no despliega nada: la flecha apunta
+                  hacia donde va. */}
+              <Ionicons name="chevron-forward" size={14} color={colors.heroTextMuted} />
             </Pressable>
           </View>
 
