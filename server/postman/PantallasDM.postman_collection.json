@@ -674,10 +674,331 @@
       ]
     },
     {
+      "name": "Servicios",
+      "item": [
+        {
+          "name": "14. Listar servicios",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/services",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "services"
+              ]
+            },
+            "description": "Catálogo público: alimenta la pantalla de servicios que ve cualquier cliente antes de reservar. El precio viaja como entero en pesos, no como decimal."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "",
+                  "const servicios = pm.response.json();",
+                  "",
+                  "pm.test('viene una lista con al menos un servicio', () => {",
+                  "    pm.expect(servicios).to.be.an('array').that.is.not.empty;",
+                  "});",
+                  "",
+                  "pm.test('el precio es un entero de pesos', () => {",
+                  "    servicios.forEach((s) => pm.expect(Number.isInteger(s.priceCop)).to.be.true);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "15. Crear servicio (admin)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenAdmin}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Afeitado clasico\",\n  \"description\": \"Navaja, toalla caliente y balsamo.\",\n  \"priceCop\": 32000,\n  \"category\": \"Barba\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/services",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "services"
+              ]
+            },
+            "description": "Solo el administrador. Guarda el id creado para las peticiones siguientes."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201 Created', () => pm.response.to.have.status(201));",
+                  "",
+                  "pm.test('devuelve la cabecera Location', () => {",
+                  "    pm.expect(pm.response.headers.get('Location')).to.include('/api/v1/services/');",
+                  "});",
+                  "",
+                  "pm.environment.set('serviceId', pm.response.json().id);"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "16. Crear servicio repetido (409)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenAdmin}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Afeitado clasico\",\n  \"description\": \"Navaja, toalla caliente y balsamo.\",\n  \"priceCop\": 32000,\n  \"category\": \"Barba\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/services",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "services"
+              ]
+            },
+            "description": "El nombre duplicado lo rechaza el índice único de la base, no una consulta previa: dos administradores creando a la vez pasarían ambos un control hecho en el código."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('409 Conflict', () => pm.response.to.have.status(409));",
+                  "pm.test('codigo SERVICE_NAME_TAKEN', () => {",
+                  "    pm.expect(pm.response.json().error.code).to.eql('SERVICE_NAME_TAKEN');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "17. Crear servicio sin token (401)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Afeitado clasico\",\n  \"description\": \"Navaja, toalla caliente y balsamo.\",\n  \"priceCop\": 32000,\n  \"category\": \"Barba\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/services",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "services"
+              ]
+            },
+            "description": "Sin sesión no se escribe en el catálogo."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('401 Unauthorized', () => pm.response.to.have.status(401));",
+                  "pm.test('codigo UNAUTHORIZED', () => {",
+                  "    pm.expect(pm.response.json().error.code).to.eql('UNAUTHORIZED');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "18. Crear servicio como barbero (403)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenBarbero}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Afeitado clasico\",\n  \"description\": \"Navaja, toalla caliente y balsamo.\",\n  \"priceCop\": 32000,\n  \"category\": \"Barba\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/services",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "services"
+              ]
+            },
+            "description": "El barbero tiene sesión válida y aun así no puede: el precio de un corte es una decisión del negocio, no de quien lo ejecuta. 403 y no 401 porque sí sabemos quién es."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('403 Forbidden', () => pm.response.to.have.status(403));",
+                  "pm.test('codigo FORBIDDEN', () => {",
+                  "    pm.expect(pm.response.json().error.code).to.eql('FORBIDDEN');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "19. Editar servicio (admin)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenAdmin}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Afeitado clasico\",\n  \"description\": \"Ahora con masaje facial.\",\n  \"priceCop\": 36000,\n  \"category\": \"Barba\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/services/{{serviceId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "services",
+                "{{serviceId}}"
+              ]
+            },
+            "description": "PUT y no PATCH: el cuerpo lleva el servicio completo. Un formulario de edición manda todos los campos igual, y el reemplazo total evita la ambigüedad entre \"campo ausente\" y \"campo que quiero vaciar\"."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "",
+                  "pm.test('conserva el id y aplica el precio nuevo', () => {",
+                  "    const s = pm.response.json();",
+                  "    pm.expect(s.id).to.eql(pm.environment.get('serviceId'));",
+                  "    pm.expect(s.priceCop).to.eql(36000);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "20. Eliminar servicio (admin)",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenAdmin}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/services/{{serviceId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "services",
+                "{{serviceId}}"
+              ]
+            },
+            "description": "204 sin cuerpo: operación correcta que no tiene nada que devolver."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('204 No Content', () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ],
+          "response": []
+        }
+      ]
+    },
+    {
       "name": "Citas",
       "item": [
         {
-          "name": "14. Crear cita",
+          "name": "21. Crear cita",
           "request": {
             "method": "POST",
             "header": [
@@ -795,7 +1116,7 @@
           ]
         },
         {
-          "name": "15. Crear cita duplicada (409)",
+          "name": "22. Crear cita duplicada (409)",
           "request": {
             "method": "POST",
             "header": [
@@ -882,7 +1203,7 @@
           ]
         },
         {
-          "name": "16. Crear cita con datos invalidos (400)",
+          "name": "23. Crear cita con datos invalidos (400)",
           "request": {
             "method": "POST",
             "header": [
@@ -932,7 +1253,7 @@
           "response": []
         },
         {
-          "name": "17. Crear cita fuera de franja (422)",
+          "name": "24. Crear cita fuera de franja (422)",
           "request": {
             "method": "POST",
             "header": [
@@ -980,7 +1301,7 @@
           "response": []
         },
         {
-          "name": "18. Obtener cita por id",
+          "name": "25. Obtener cita por id",
           "request": {
             "method": "GET",
             "header": [],
@@ -1015,7 +1336,7 @@
           "response": []
         },
         {
-          "name": "19. Aplazar cita (cliente)",
+          "name": "26. Aplazar cita (cliente)",
           "request": {
             "method": "POST",
             "header": [
@@ -1068,7 +1389,7 @@
           "response": []
         },
         {
-          "name": "20. Cancelar con telefono equivocado (403)",
+          "name": "27. Cancelar con telefono equivocado (403)",
           "request": {
             "method": "POST",
             "header": [
@@ -1114,7 +1435,7 @@
           "response": []
         },
         {
-          "name": "21. Cancelar cita",
+          "name": "28. Cancelar cita",
           "request": {
             "method": "DELETE",
             "header": [
@@ -1154,7 +1475,7 @@
           "response": []
         },
         {
-          "name": "22. Cancelar cita ya cancelada (409)",
+          "name": "29. Cancelar cita ya cancelada (409)",
           "request": {
             "method": "DELETE",
             "header": [
@@ -1194,7 +1515,7 @@
           "response": []
         },
         {
-          "name": "23. Cita inexistente (404)",
+          "name": "30. Cita inexistente (404)",
           "request": {
             "method": "GET",
             "header": [],
@@ -1229,7 +1550,7 @@
           "response": []
         },
         {
-          "name": "24. Agenda completa (admin)",
+          "name": "31. Agenda completa (admin)",
           "request": {
             "method": "GET",
             "header": [
@@ -1268,7 +1589,7 @@
           "response": []
         },
         {
-          "name": "25. Agenda propia (barbero)",
+          "name": "32. Agenda propia (barbero)",
           "request": {
             "method": "GET",
             "header": [
@@ -1309,7 +1630,7 @@
           "response": []
         },
         {
-          "name": "26. Agenda sin token (401)",
+          "name": "33. Agenda sin token (401)",
           "request": {
             "method": "GET",
             "header": [],

@@ -29,6 +29,10 @@ export const ERROR_CODES = {
   /** 403 - el teléfono no corresponde al de la cita. */
   BOOKING_PHONE_MISMATCH: 'BOOKING_PHONE_MISMATCH',
 
+  SERVICE_NOT_FOUND: 'SERVICE_NOT_FOUND',
+  /** 409 - ya hay un servicio con ese nombre. */
+  SERVICE_NAME_TAKEN: 'SERVICE_NAME_TAKEN',
+
   DATE_IN_PAST: 'DATE_IN_PAST',
   TIME_IN_PAST: 'TIME_IN_PAST',
   TIME_NOT_IN_SCHEDULE: 'TIME_NOT_IN_SCHEDULE',

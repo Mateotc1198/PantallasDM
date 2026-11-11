@@ -221,6 +221,11 @@ Todos bajo `/api/v1`.
 | 10 | `DELETE` | `/bookings/:id` | **admin · barbero** | Cancelar desde el panel |
 | 11 | `POST` | `/bookings/:id/cancel` | cliente | Cancelar su propia cita |
 | 12 | `POST` | `/bookings/:id/reschedule` | cliente | Aplazar su propia cita |
+| 13 | `GET` | `/services` | público | Catálogo de servicios |
+| 14 | `GET` | `/services/:id` | público | Detalle de un servicio |
+| 15 | `POST` | `/services` | **admin** | Crear servicio |
+| 16 | `PUT` | `/services/:id` | **admin** | Editar servicio |
+| 17 | `DELETE` | `/services/:id` | **admin** | Eliminar servicio |
 
 Fuera del contrato de negocio: `GET /health`, sonda de infraestructura.
 
@@ -256,6 +261,36 @@ petición para que un filtro de interfaz deje de proteger nada.
 | `DELETE /bookings/:id` | `204` | `400` `401` `403` `404` `409` `500` |
 | `POST /bookings/:id/cancel` | `204` | `400` `403` `404` `409` `422` `429` `500` |
 | `POST /bookings/:id/reschedule` | `200` | `400` `403` `404` `409` `422` `429` `500` |
+| `GET /services` | `200` | `500` |
+| `GET /services/:id` | `200` | `400` `404` `500` |
+| `POST /services` | `201` + `Location` | `400` `401` `403` `409` `500` |
+| `PUT /services/:id` | `200` | `400` `401` `403` `404` `409` `500` |
+| `DELETE /services/:id` | `204` | `400` `401` `403` `404` `500` |
+
+### El catálogo de servicios
+
+Es el único recurso con escritura completa desde el panel, y el único donde
+`admin` y `barbero` no valen lo mismo: el barbero tiene sesión válida y aun así
+recibe `403`, porque el precio de un corte es una decisión del negocio y no de
+quien lo ejecuta.
+
+El precio se guarda como **entero en pesos**. El dinero no se representa en coma
+flotante —0.1 + 0.2 no es 0.3— y el peso colombiano no usa centavos en la
+práctica.
+
+La tabla **no tiene columna de duración**, y es deliberado. Sería la puerta de
+entrada a citas de duración variable, y todo el modelo de franjas
+(`barber_schedules.slot_minutes`, el índice único de `bookings`) asume bloques
+iguales. Añadir la columna sin cambiar eso prometería algo que el sistema no
+cumple.
+
+El nombre es único sin distinguir mayúsculas, y el duplicado lo rechaza el
+índice `services_nombre_unico`, no una consulta previa: dos administradores
+creando a la vez pasarían ambos un control hecho en el código.
+
+A diferencia de los horarios, el seed **no sobrescribe** el catálogo en cada
+arranque. Solo siembra si la tabla está vacía, porque aquí sí manda el
+administrador: sería absurdo que un despliegue le deshiciera los precios.
 
 ### El cliente no tiene cuenta
 

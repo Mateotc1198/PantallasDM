@@ -78,4 +78,24 @@ SET first_slot_at = EXCLUDED.first_slot_at,
 DELETE FROM barber_schedules
 WHERE barber_id = 'alexander-escobar' AND weekday = 0;
 
+-- ---------------------------------------------------------------------------
+-- Catalogo inicial.
+--
+-- A diferencia de los horarios, esto NO se sobreescribe en cada arranque: el
+-- administrador edita los servicios desde el panel y seria absurdo que el
+-- siguiente despliegue le deshiciera los cambios. Solo se siembran si la
+-- tabla esta vacia.
+-- ---------------------------------------------------------------------------
+INSERT INTO services (name, description, price_cop, category)
+SELECT * FROM (VALUES
+  ('Corte clasico', 'Tijera y maquina, lavado y peinado.', 25000, 'Cortes'),
+  ('Fade', 'Degradado a maquina con perfilado de contornos.', 30000, 'Cortes'),
+  ('Corte + barba', 'El combo completo, con toalla caliente.', 42000, 'Cortes'),
+  ('Arreglo de barba', 'Perfilado, recorte y aceite.', 20000, 'Barba'),
+  ('Barba con toalla caliente', 'Vapor, afeitado al ras y balsamo.', 28000, 'Barba'),
+  ('Color', 'Tinte completo con productos sin amoniaco.', 60000, 'Color y estilos'),
+  ('Mechas', 'Iluminacion parcial y matizado.', 75000, 'Color y estilos')
+) AS iniciales(name, description, price_cop, category)
+WHERE NOT EXISTS (SELECT 1 FROM services);
+
 COMMIT;

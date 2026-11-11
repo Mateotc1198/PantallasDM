@@ -158,4 +158,37 @@ CREATE UNIQUE INDEX IF NOT EXISTS users_barbero_unico
   ON users (barber_id)
   WHERE barber_id IS NOT NULL;
 
+-- ---------------------------------------------------------------------------
+-- services
+--
+-- El catalogo de la barberia: lo que se ofrece y a que precio. Es global y no
+-- por barbero porque el negocio vende los mismos servicios atienda quien
+-- atienda; si manana eso cambia, se agrega una tabla de union y esta no se
+-- toca.
+--
+-- NO tiene duracion. Seria la puerta de entrada a citas de duracion variable,
+-- y todo el modelo de franjas (barber_schedules.slot_minutes, el indice unico
+-- de bookings) asume bloques iguales. Añadir la columna sin cambiar eso seria
+-- prometer algo que el sistema no cumple.
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS services (
+  id          UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+  name        TEXT        NOT NULL CHECK (char_length(trim(name)) >= 3),
+  description TEXT        NOT NULL DEFAULT '',
+  -- Entero y en pesos: el dinero nunca en coma flotante, y el peso colombiano
+  -- no usa centavos en la practica.
+  price_cop   INTEGER     NOT NULL CHECK (price_cop >= 0),
+  category    TEXT        NOT NULL CHECK (char_length(trim(category)) >= 3),
+  image_url   TEXT,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- La pantalla publica agrupa por categoria.
+CREATE INDEX IF NOT EXISTS services_category_idx ON services (category);
+
+-- Sin distinguir mayusculas: "Corte clasico" y "corte clasico" son el mismo
+-- servicio escrito por dos personas distintas.
+CREATE UNIQUE INDEX IF NOT EXISTS services_nombre_unico ON services (lower(name));
+
 COMMIT;
