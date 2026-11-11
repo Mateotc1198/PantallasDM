@@ -8,7 +8,8 @@ import { ERROR_CODES } from '../errors/codes.js';
 import * as bookingsRepository from '../repositories/bookings.repository.js';
 import * as schedulesRepository from '../repositories/schedules.repository.js';
 import type { AuthUser, Booking, CreateBookingInput } from '../types/api.js';
-import { currentMinutes, today } from '../utils/clock.js';
+import { env } from '../config/env.js';
+import { currentMinutes, minutesUntilBooking, today } from '../utils/clock.js';
 import { isSlotBoundary, toMinutes, weekdayOf } from '../utils/time.js';
 
 import * as barbersService from './barbers.service.js';
@@ -20,7 +21,13 @@ import * as barbersService from './barbers.service.js';
  * después lo que determina un 422, y el 409 lo decide la base de datos.
  */
 
-async function assertReservable(input: CreateBookingInput): Promise<void> {
+interface FranjaSolicitada {
+  barberId: string;
+  date: string;
+  time: string;
+}
+
+async function assertReservable(input: FranjaSolicitada): Promise<void> {
   const currentDate = today();
 
   if (input.date < currentDate) {
@@ -157,4 +164,102 @@ export async function cancel(id: string, user: AuthUser): Promise<void> {
       'Esa cita ya estaba cancelada.',
     );
   }
+}
+
+/**
+ * El cliente no tiene cuenta: su credencial es conocer el UUID de la cita,
+ * que no se adivina, más el teléfono con el que reservó.
+ *
+ * El teléfono no está ahí por capricho. Si alguien ve el código de reojo en
+ * una pantalla, o lo recibe reenviado, con el UUID solo podría cancelarle
+ * la cita a otro. Con el teléfono tiene que saber además quién reservó.
+ */
+function assertEsSuCita(booking: Booking, customerPhone: string): void {
+  if (booking.customerPhone !== customerPhone) {
+    throw new ForbiddenError(
+      ERROR_CODES.BOOKING_PHONE_MISMATCH,
+      'El teléfono no coincide con el de la cita.',
+    );
+  }
+}
+
+/**
+ * Regla de negocio: una cita no se toca a última hora.
+ *
+ * El barbero ya reservó ese tiempo y no puede rellenarlo con diez minutos
+ * de aviso. El plazo es configurable porque es una decisión del negocio, no
+ * del programa.
+ */
+function assertDentroDelPlazo(booking: Booking): void {
+  const faltan = minutesUntilBooking(booking.date, booking.time);
+
+  if (faltan < env.bookingChangeWindowMinutes) {
+    const horas = env.bookingChangeWindowHours;
+    throw new UnprocessableError(
+      ERROR_CODES.BOOKING_CHANGE_TOO_LATE,
+      `Los cambios deben hacerse con al menos ${horas} ${horas === 1 ? 'hora' : 'horas'} de antelación. Comunícate con la barbería.`,
+      [{ field: 'date', issue: 'fuera del plazo de cambios' }],
+    );
+  }
+}
+
+/** Cancelación hecha por el propio cliente, sin sesión. */
+export async function cancelByCustomer(id: string, customerPhone: string): Promise<void> {
+  const booking = await getById(id);
+
+  // El teléfono se comprueba antes que el plazo: si no es tu cita, no tienes
+  // por qué enterarte de a qué hora es.
+  assertEsSuCita(booking, customerPhone);
+  assertDentroDelPlazo(booking);
+
+  const cancelled = await bookingsRepository.cancel(id);
+
+  if (cancelled === null) {
+    throw new ConflictError(
+      ERROR_CODES.BOOKING_ALREADY_CANCELLED,
+      'Esa cita ya estaba cancelada.',
+    );
+  }
+}
+
+/**
+ * Aplazamiento hecho por el propio cliente.
+ *
+ * El plazo se mide sobre la cita ACTUAL, no sobre la nueva: lo que hay que
+ * respetar es el aviso al barbero que ya tenía ese hueco reservado.
+ *
+ * La franja de destino pasa por las mismas reglas que una reserva nueva: el
+ * barbero tiene que atender ese día, la hora tiene que ser una franja real y
+ * no puede estar en el pasado.
+ */
+export async function rescheduleByCustomer(
+  id: string,
+  customerPhone: string,
+  date: string,
+  time: string,
+): Promise<Booking> {
+  const booking = await getById(id);
+
+  assertEsSuCita(booking, customerPhone);
+  assertDentroDelPlazo(booking);
+  await assertReservable({ barberId: booking.barberId, date, time });
+
+  const result = await bookingsRepository.reschedule(id, date, time);
+
+  if (result === null) {
+    throw new ConflictError(
+      ERROR_CODES.BOOKING_ALREADY_CANCELLED,
+      'Esa cita ya estaba cancelada.',
+    );
+  }
+
+  if (!result.ok) {
+    throw new ConflictError(
+      ERROR_CODES.BOOKING_SLOT_TAKEN,
+      'Ese horario ya está reservado.',
+      [{ field: 'time', issue: 'ocupado' }],
+    );
+  }
+
+  return result.booking;
 }

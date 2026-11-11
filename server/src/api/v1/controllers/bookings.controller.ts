@@ -6,6 +6,8 @@ import {
   agendaQuerySchema,
   bookingIdParamsSchema,
   createBookingSchema,
+  customerActionSchema,
+  rescheduleSchema,
 } from '../dto/bookings.dto.js';
 
 /**
@@ -42,4 +44,28 @@ export async function cancel(req: Request, res: Response): Promise<void> {
 
   // 204: operación exitosa que no tiene nada que devolver. Sin cuerpo.
   res.status(204).end();
+}
+
+/**
+ * POST /api/v1/bookings/:id/cancel
+ *
+ * Cancelación del propio cliente. Es POST y no DELETE porque necesita
+ * cuerpo: el teléfono que acompaña al código de la cita. DELETE con cuerpo
+ * está mal soportado, y llevarlo en la query lo dejaría escrito en los logs.
+ */
+export async function cancelByCustomer(req: Request, res: Response): Promise<void> {
+  const { id } = bookingIdParamsSchema.parse(req.params);
+  const { customerPhone } = customerActionSchema.parse(req.body);
+
+  await bookingsService.cancelByCustomer(id, customerPhone);
+  res.status(204).end();
+}
+
+/** POST /api/v1/bookings/:id/reschedule */
+export async function reschedule(req: Request, res: Response): Promise<void> {
+  const { id } = bookingIdParamsSchema.parse(req.params);
+  const { customerPhone, date, time } = rescheduleSchema.parse(req.body);
+
+  const booking = await bookingsService.rescheduleByCustomer(id, customerPhone, date, time);
+  res.status(200).json(booking);
 }

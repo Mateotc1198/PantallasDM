@@ -214,10 +214,13 @@ Todos bajo `/api/v1`.
 | 3 | `GET` | `/barbers` | público | Lista de barberos (sin reseñas) |
 | 4 | `GET` | `/barbers/:id` | público | Detalle con reseñas |
 | 5 | `GET` | `/barbers/:id/slots?date=` | público | Disponibilidad del día |
-| 6 | `GET` | `/bookings?date=&barberId=` | **admin · barbero** | Agenda del panel |
-| 7 | `POST` | `/bookings` | público | Crear cita |
-| 8 | `GET` | `/bookings/:id` | público | Consultar cita |
-| 9 | `DELETE` | `/bookings/:id` | **admin · barbero** | Cancelar cita |
+| 6 | `GET` | `/barbers/:id/availability?month=` | público | Días del mes con cupo |
+| 7 | `GET` | `/bookings?date=&barberId=` | **admin · barbero** | Agenda del panel |
+| 8 | `POST` | `/bookings` | público | Crear cita |
+| 9 | `GET` | `/bookings/:id` | público | Consultar cita |
+| 10 | `DELETE` | `/bookings/:id` | **admin · barbero** | Cancelar desde el panel |
+| 11 | `POST` | `/bookings/:id/cancel` | cliente | Cancelar su propia cita |
+| 12 | `POST` | `/bookings/:id/reschedule` | cliente | Aplazar su propia cita |
 
 Fuera del contrato de negocio: `GET /health`, sonda de infraestructura.
 
@@ -246,10 +249,50 @@ petición para que un filtro de interfaz deje de proteger nada.
 | `GET /barbers` | `200` | `500` |
 | `GET /barbers/:id` | `200` | `404` `500` |
 | `GET /barbers/:id/slots` | `200` | `400` `404` `422` `500` |
+| `GET /barbers/:id/availability` | `200` | `400` `404` `500` |
 | `POST /bookings` | `201` + `Location` | `400` `404` `409` `422` `429` `500` |
 | `GET /bookings` | `200` | `400` `401` `403` `500` |
 | `GET /bookings/:id` | `200` | `400` `404` `500` |
 | `DELETE /bookings/:id` | `204` | `400` `401` `403` `404` `409` `500` |
+| `POST /bookings/:id/cancel` | `204` | `400` `403` `404` `409` `422` `429` `500` |
+| `POST /bookings/:id/reschedule` | `200` | `400` `403` `404` `409` `422` `429` `500` |
+
+### El cliente no tiene cuenta
+
+Cancelar y aplazar los hace el propio cliente, que nunca se registra. Su
+credencial son dos cosas a la vez: el **UUID de la cita**, que no se adivina
+(122 bits de entropía) y que recibe al reservar, y el **teléfono** con el que
+reservó.
+
+El teléfono no sobra. Sin él, cualquiera que viera el código de reojo en una
+pantalla, o lo recibiera reenviado, podría cancelarle la cita a otro. Con él,
+hace falta además saber quién reservó. Se comprueba **antes** que el plazo, para
+que un intento con el teléfono equivocado no revele a qué hora es la cita.
+
+Va en el cuerpo y no en la URL a propósito: una query string acaba escrita en
+los registros del servidor y en el historial de los proxies, y esto es un dato
+personal.
+
+Por eso son `POST` y no `DELETE`: necesitan cuerpo, y `DELETE` con cuerpo está
+mal soportado por buena parte de los clientes HTTP.
+
+### El plazo de cambios
+
+`BOOKING_CHANGE_WINDOW_HOURS` (por defecto **2**) fija con cuánta antelación
+puede el cliente tocar su cita. Pasado ese punto responde `422` con
+`BOOKING_CHANGE_TOO_LATE`.
+
+Es una regla de negocio, no una constante del programa: el barbero ya reservó
+ese tiempo y no puede rellenarlo con diez minutos de aviso. Que sea variable de
+entorno significa que la barbería puede pasar a 24 horas sin recompilar.
+
+El plazo se mide siempre sobre la cita **actual**, no sobre la nueva: lo que hay
+que respetar es el aviso a quien ya tenía ese hueco bloqueado.
+
+Aplazar reutiliza el mismo índice único parcial que protege la creación: un
+`UPDATE` hacia una franja ocupada choca contra `bookings_slot_unico` igual que
+lo haría un `INSERT`. No hay consulta previa y, por tanto, no hay ventana entre
+comprobar y mover.
 
 La distinción entre los códigos de error no es decorativa:
 
