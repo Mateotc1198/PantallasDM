@@ -23,6 +23,7 @@ import { useBooking } from '../../src/context/BookingContext';
 import { createBooking } from '../../src/data/bookings';
 import { useBookingNavigation } from '../../src/hooks/useBookingNavigation';
 import { useRequireBooking } from '../../src/hooks/useRequireBooking';
+import { guardarUltimaCita } from '../../src/storage/lastBooking';
 import { radius, spacing, typography, type Palette } from '../../src/theme/tokens';
 import { useTheme } from '../../src/theme/ThemeContext';
 import { useThemedStyles } from '../../src/theme/useThemedStyles';
@@ -95,6 +96,10 @@ export default function DatosScreen() {
       // Se guarda la cita del servidor, no la que creíamos estar creando: la
       // pantalla final muestra lo que quedó registrado de verdad.
       setBooking(booking);
+
+      // Y el código queda en el dispositivo para que "Mi cita" funcione sin
+      // que nadie tenga que copiar treinta y seis caracteres a mano.
+      void guardarUltimaCita(booking.id);
       router.replace('/reserva/confirmada');
     } catch (fallo: unknown) {
       if (montado.current) {
