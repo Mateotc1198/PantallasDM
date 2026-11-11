@@ -3,6 +3,7 @@ import { Router } from 'express';
 import authRoutes from './auth.routes.js';
 import barbersRoutes from './barbers.routes.js';
 import bookingsRoutes from './bookings.routes.js';
+import servicesRoutes from './services.routes.js';
 
 /**
  * Router de la versión 1 de la API.
@@ -17,5 +18,6 @@ const router = Router();
 router.use('/auth', authRoutes);
 router.use('/barbers', barbersRoutes);
 router.use('/bookings', bookingsRoutes);
+router.use('/services', servicesRoutes);
 
 export default router;

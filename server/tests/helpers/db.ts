@@ -66,3 +66,19 @@ export async function insertBooking(datos: {
   );
   return filas.rows[0].id;
 }
+
+/**
+ * Deja el catálogo con tres servicios conocidos.
+ *
+ * No se apoya en el seed: los tests que crean y borran servicios cambiarían
+ * lo que ve el siguiente, y un test que solo pasa según el orden no sirve.
+ */
+export async function resetServices(): Promise<void> {
+  await pool.query('TRUNCATE TABLE services');
+  await pool.query(
+    `INSERT INTO services (name, description, price_cop, category) VALUES
+       ('Corte clasico', 'Tijera y maquina.', 25000, 'Cortes'),
+       ('Fade', 'Degradado a maquina.', 30000, 'Cortes'),
+       ('Arreglo de barba', 'Perfilado y aceite.', 20000, 'Barba')`,
+  );
+}
