@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useRouter } from 'expo-router';
+import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Card } from '../../src/components/Card';
@@ -26,6 +27,7 @@ const CHECK_CIRCLE = 64;
 export default function ConfirmadaScreen() {
   const styles = useThemedStyles(makeStyles);
   const { colors } = useTheme();
+  const router = useRouter();
   const { goHome } = useBookingNavigation();
   const ready = useRequireBooking(['booking']);
   const { barber, booking } = useBooking();
@@ -58,17 +60,40 @@ export default function ConfirmadaScreen() {
           Se muestra completo y seleccionable a propósito: es lo que permite
           consultarla o cancelarla después, y un fragmento recortado no
           serviría para buscarla.
+
+          La aplicación ya lo guardó sola, así que esto es el plan B para
+          quien cambie de teléfono o borre los datos.
         */}
         <View style={styles.codeBox}>
           <Text style={styles.codeLabel}>Código de la cita</Text>
           <Text style={styles.code} selectable>
             {booking.id}
           </Text>
+
+          <Pressable
+            onPress={() => {
+              const texto = `Mi cita en ZonaBarber: ${formatDayMonthYear(booking.date)} a las ${formatTime12h(booking.time)}. Código: ${booking.id}`;
+              void Linking.openURL(`https://wa.me/?text=${encodeURIComponent(texto)}`);
+            }}
+            accessibilityRole="button"
+            accessibilityLabel="Enviarme el código por WhatsApp"
+            style={({ pressed }) => [styles.share, pressed && styles.pressed]}
+          >
+            <Ionicons name="logo-whatsapp" size={16} color={colors.whatsapp} />
+            <Text style={styles.shareLabel}>Enviármelo por WhatsApp</Text>
+          </Pressable>
         </View>
       </ScrollView>
 
       <View style={styles.footer}>
         <PrimaryButton label="Ir al inicio ahora" onPress={goHome} />
+        <Pressable
+          onPress={() => router.replace('/cita')}
+          accessibilityRole="button"
+          style={({ pressed }) => [styles.verCita, pressed && styles.pressed]}
+        >
+          <Text style={styles.verCitaLabel}>Ver, aplazar o cancelar mi cita</Text>
+        </Pressable>
       </View>
     </SafeAreaView>
   );
@@ -119,6 +144,29 @@ const makeStyles = (colors: Palette) => StyleSheet.create({
     ...typography.caption,
     color: colors.textSecondary,
     textAlign: 'center',
+  },
+  share: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    paddingTop: spacing.sm,
+  },
+  shareLabel: {
+    ...typography.caption,
+    fontWeight: '700',
+    color: colors.textSecondary,
+  },
+  verCita: {
+    alignItems: 'center',
+    paddingTop: spacing.sm,
+  },
+  verCitaLabel: {
+    ...typography.caption,
+    fontWeight: '700',
+    color: colors.primaryText,
+  },
+  pressed: {
+    opacity: 0.6,
   },
   footer: {
     padding: spacing.md,

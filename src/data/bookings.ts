@@ -26,6 +26,39 @@ export function getBooking(id: string): Promise<Booking> {
 }
 
 /**
+ * POST /bookings/:id/cancel — cancelación hecha por el propio cliente.
+ *
+ * Sin sesión: la credencial es el código de la cita más el teléfono con el
+ * que se reservó. Responde 403 si el teléfono no coincide y 422 si la cita
+ * está demasiado cerca para tocarla.
+ */
+export function cancelBookingAsCustomer(id: string, customerPhone: string): Promise<void> {
+  return apiPost<void>(`/api/v1/bookings/${encodeURIComponent(id)}/cancel`, {
+    customerPhone,
+  });
+}
+
+/**
+ * POST /bookings/:id/reschedule — aplazamiento hecho por el propio cliente.
+ *
+ * Devuelve la cita con su MISMO id: aplazar mueve la que hay, no crea otra.
+ * El destino pasa las mismas reglas que una reserva nueva, así que puede
+ * responder 409 si alguien tomó esa franja mientras tanto.
+ */
+export function rescheduleBooking(
+  id: string,
+  customerPhone: string,
+  date: string,
+  time: string,
+): Promise<Booking> {
+  return apiPost<Booking>(`/api/v1/bookings/${encodeURIComponent(id)}/reschedule`, {
+    customerPhone,
+    date,
+    time,
+  });
+}
+
+/**
  * GET /bookings — la agenda. Requiere sesión.
  *
  * El filtro por barbero es una comodidad de la interfaz, no un control de

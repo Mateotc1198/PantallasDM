@@ -36,6 +36,10 @@ export default function HomeScreen() {
     router.push('/admin');
   }, [router]);
 
+  const openMiCita = useCallback(() => {
+    router.push('/cita');
+  }, [router]);
+
   return (
     <ImageBackground source={{ uri: HERO_IMAGE }} style={styles.hero}>
       <View style={styles.overlay}>
@@ -66,6 +70,21 @@ export default function HomeScreen() {
                 </Pressable>
               </View>
             </View>
+
+            {/*
+              Quien ya reservó vuelve aquí a consultar, aplazar o cancelar.
+              No depende de tener la cita guardada: la pantalla también
+              acepta el código a mano.
+            */}
+            <Pressable
+              onPress={openMiCita}
+              accessibilityRole="button"
+              accessibilityLabel="Ver, aplazar o cancelar mi cita"
+              style={({ pressed }) => [styles.miCita, pressed && styles.pressed]}
+            >
+              <Ionicons name="calendar-outline" size={14} color={colors.heroText} />
+              <Text style={styles.miCitaLabel}>Mi cita</Text>
+            </Pressable>
 
             {/*
               Acceso al panel. Discreto a propósito: esta es la pantalla de
@@ -177,6 +196,17 @@ const makeStyles = (colors: Palette) => StyleSheet.create({
   contactLabel: {
     ...typography.caption,
     color: colors.heroTextMuted,
+  },
+  miCita: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    paddingTop: spacing.sm,
+  },
+  miCitaLabel: {
+    ...typography.caption,
+    fontWeight: '700',
+    color: colors.heroText,
   },
   admin: {
     flexDirection: 'row',
