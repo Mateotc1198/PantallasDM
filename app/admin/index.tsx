@@ -1,9 +1,10 @@
 import { Redirect, useRouter } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { toApiError } from '../../src/api/client';
+import { AdminHeader } from '../../src/components/AdminHeader';
 import { BookingRow } from '../../src/components/BookingRow';
 import { Calendar } from '../../src/components/Calendar';
 import { ErrorState } from '../../src/components/ErrorState';
@@ -129,23 +130,7 @@ export default function AgendaScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.content}>
-        <View style={styles.header}>
-          <View style={styles.identity}>
-            <Text style={styles.brand}>ZONABARBER</Text>
-            <Text style={styles.role}>
-              {esAdmin ? 'Panel de administración' : `Agenda de ${user.username}`}
-            </Text>
-          </View>
-          <Pressable
-            onPress={cerrarSesion}
-            hitSlop={8}
-            accessibilityRole="button"
-            accessibilityLabel="Cerrar sesión"
-            style={({ pressed }) => [styles.logout, pressed && styles.pressed]}
-          >
-            <Text style={styles.logoutLabel}>Cerrar sesión</Text>
-          </Pressable>
-        </View>
+        <AdminHeader user={user} onLogout={cerrarSesion} />
 
         {/*
           El filtro solo existe para el administrador. A un barbero el
@@ -227,35 +212,6 @@ const makeStyles = (colors: Palette) => StyleSheet.create({
     padding: spacing.md,
     gap: spacing.sm,
   },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    paddingBottom: spacing.xs,
-    // Deja sitio al interruptor de tema, que flota arriba a la derecha.
-    paddingRight: 56,
-  },
-  identity: {
-    flex: 1,
-    gap: 2,
-  },
-  brand: {
-    ...typography.cardTitle,
-    letterSpacing: 1.5,
-    color: colors.textPrimary,
-  },
-  role: {
-    ...typography.meta,
-    color: colors.textSecondary,
-  },
-  logout: {
-    paddingVertical: spacing.xs,
-  },
-  logoutLabel: {
-    ...typography.meta,
-    fontWeight: '700',
-    color: colors.primaryText,
-  },
   filters: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -281,8 +237,5 @@ const makeStyles = (colors: Palette) => StyleSheet.create({
     color: colors.textMuted,
     textAlign: 'center',
     paddingVertical: spacing.xl,
-  },
-  pressed: {
-    opacity: 0.6,
   },
 });
