@@ -128,9 +128,12 @@ jobs:
     name: SonarQube Cloud
     runs-on: ubuntu-latest
     needs: [app, api]
-    # En un fork sin el secreto, el análisis se salta en vez de fallar y
-    # teñir de rojo un pull request que está bien.
-    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
+    # El token vive en el repositorio donde esta enlazado el proyecto de
+    # Sonar. En cualquier otro —el repositorio de la clase, el fork de un
+    # tercero— el secreto no existe, y el analisis se salta en vez de teñir
+    # de rojo un cambio que esta bien.
+    env:
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
     steps:
       - uses: actions/checkout@v7
@@ -146,6 +149,5 @@ jobs:
           path: server/coverage
 
       - name: Analizar
+        if: env.SONAR_TOKEN != ''
         uses: SonarSource/sonarqube-scan-action@v8
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
