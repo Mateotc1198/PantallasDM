@@ -9,7 +9,7 @@ import type { AuthUser } from './api.js';
  * compilador obliga a comprobarlo antes de usarlo.
  */
 declare global {
-  // eslint-disable-next-line @typescript-eslint/no-namespace
+   
   namespace Express {
     interface Request {
       user?: AuthUser;

@@ -182,8 +182,9 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
         ...init?.headers,
       },
     });
-  } catch (error) {
-    // abort() y "sin internet" llegan aquí igual; solo el flag los separa.
+    // abort() y "sin internet" llegan aquí igual; solo el flag los separa,
+    // así que el error en sí no aporta nada y no se vincula.
+  } catch {
     if (controlador.signal.aborted) {
       throw new ApiError(
         'El servidor tardó demasiado en responder.',
