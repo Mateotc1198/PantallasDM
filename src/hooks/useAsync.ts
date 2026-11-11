@@ -44,7 +44,7 @@ export function useAsync<T>(
 ): AsyncState<T> {
   const [data, setData] = useState<T | null>(null);
   const [error, setError] = useState<ApiError | null>(null);
-  const [loading, setLoading] = useState(enabled);
+  const [cargando, setCargando] = useState(enabled);
   const [slow, setSlow] = useState(false);
   const [intento, setIntento] = useState(0);
 
@@ -54,11 +54,23 @@ export function useAsync<T>(
    * identidad de la closure, que cambia en cada render.
    */
   const cargarRef = useRef(cargar);
-  cargarRef.current = cargar;
+
+  /**
+   * El ref se actualiza en un efecto y NO durante el render.
+   *
+   * Escribir en un ref mientras se renderiza no es seguro: el render
+   * concurrente de React puede empezar un render, descartarlo y volver a
+   * empezar, y la escritura ya habría ocurrido. Este efecto no lleva array
+   * de dependencias (corre tras cada render) y está declarado ANTES del que
+   * carga, así que cuando aquel se ejecute el ref ya apunta a la función
+   * nueva: los efectos se ejecutan en orden de declaración.
+   */
+  useEffect(() => {
+    cargarRef.current = cargar;
+  });
 
   useEffect(() => {
     if (!enabled) {
-      setLoading(false);
       return;
     }
 
@@ -70,7 +82,19 @@ export function useAsync<T>(
      */
     let vigente = true;
 
-    setLoading(true);
+    /*
+     * La regla set-state-in-effect persigue el setState que podría haberse
+     * calculado durante el render. Este no: marca el inicio de una
+     * operación asíncrona, que por definición no se conoce al renderizar.
+     *
+     * La alternativa sin estado sería derivar "cargando" de una clave
+     * construida con las dependencias y compararla con la del último
+     * resultado. Funciona, pero obliga en silencio a que todas las
+     * dependencias sean primitivas serializables, y eso es una trampa para
+     * el siguiente que use el hook.
+     */
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setCargando(true);
     setError(null);
     setSlow(false);
 
@@ -97,7 +121,7 @@ export function useAsync<T>(
       .finally(() => {
         clearTimeout(avisoLento);
         if (vigente) {
-          setLoading(false);
+          setCargando(false);
           setSlow(false);
         }
       });
@@ -113,5 +137,12 @@ export function useAsync<T>(
     setIntento((anterior) => anterior + 1);
   }, []);
 
-  return { data, error, loading, slow, reload };
+  /**
+   * `enabled && cargando` se deduce en vez de guardarse.
+   *
+   * Apagar el estado desde el efecto cuando la carga está deshabilitada
+   * provocaba un render en cascada para expresar algo que ya se sabe sin
+   * preguntar: si no hay carga habilitada, no hay nada cargando.
+   */
+  return { data, error, loading: enabled && cargando, slow, reload };
 }

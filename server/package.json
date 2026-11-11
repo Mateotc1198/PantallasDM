@@ -21,7 +21,9 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "users:seed": "node scripts/seed-users.mjs"
+    "users:seed": "node scripts/seed-users.mjs",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",
@@ -35,6 +37,7 @@
     "zod": "4.6.7"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@types/cors": "2.8.19",
     "@types/express": "5.0.6",
     "@types/jsonwebtoken": "^9.0.10",
@@ -42,9 +45,12 @@
     "@types/pg": "8.23.1",
     "@types/supertest": "7.2.1",
     "@vitest/coverage-v8": "^5.0.4",
+    "eslint": "^10.14.0",
+    "globals": "^17.14.0",
     "supertest": "7.3.1",
     "tsx": "4.23.15",
-    "typescript": "7.0.2",
+    "typescript": "~6.0.3",
+    "typescript-eslint": "^8.72.2",
     "vitest": "5.0.4"
   }
 }
