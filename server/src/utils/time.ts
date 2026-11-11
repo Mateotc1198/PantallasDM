@@ -135,3 +135,19 @@ export function daysOfMonth(month: string): string[] {
   }
   return days;
 }
+
+/**
+ * Minutos que faltan desde `now` hasta una fecha y hora civiles.
+ * Negativo si ya pasaron.
+ *
+ * Recibe el instante en vez de leer el reloj para seguir siendo pura: esa
+ * es la diferencia entre poder probar "faltan 90 minutos" con un test
+ * determinista y tener que esperar a que den las nueve.
+ */
+export function minutesUntil(date: string, time: string, now: Date): number {
+  const [year, month, day] = date.split('-').map(Number);
+  const [hours, minutes] = time.split(':').map(Number);
+  const objetivo = new Date(year, month - 1, day, hours, minutes, 0, 0);
+
+  return Math.round((objetivo.getTime() - now.getTime()) / 60_000);
+}

@@ -7,6 +7,7 @@ import {
   isValidISODate,
   isValidISOMonth,
   isValidTime,
+  minutesUntil,
   normalizeTime,
   toMinutes,
   toTimeString,
@@ -164,5 +165,33 @@ describe('daysOfMonth', () => {
   it('un año divisible por 100 pero no por 400 no es bisiesto', () => {
     // 2100 es la trampa clásica: múltiplo de 4, pero no es bisiesto.
     expect(daysOfMonth('2100-02')).toHaveLength(28);
+  });
+});
+
+describe('minutesUntil', () => {
+  // La función recibe el instante, así que estas fechas fijas no caducan.
+  const ahora = new Date(2026, 10, 10, 10, 0, 0); // 10 nov 2026, 10:00
+
+  it('cuenta los minutos que faltan el mismo día', () => {
+    expect(minutesUntil('2026-11-10', '12:00', ahora)).toBe(120);
+    expect(minutesUntil('2026-11-10', '10:30', ahora)).toBe(30);
+  });
+
+  it('es negativo cuando la hora ya pasó', () => {
+    expect(minutesUntil('2026-11-10', '09:00', ahora)).toBe(-60);
+  });
+
+  it('cruza el cambio de día', () => {
+    expect(minutesUntil('2026-11-11', '09:00', ahora)).toBe(1380);
+    expect(minutesUntil('2026-11-09', '10:00', ahora)).toBe(-1440);
+  });
+
+  it('vale cero justo en el instante de la cita', () => {
+    expect(minutesUntil('2026-11-10', '10:00', ahora)).toBe(0);
+  });
+
+  it('cruza el cambio de mes sin despeinarse', () => {
+    const fin = new Date(2026, 10, 30, 23, 30, 0);
+    expect(minutesUntil('2026-12-01', '00:30', fin)).toBe(60);
   });
 });

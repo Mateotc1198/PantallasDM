@@ -1,4 +1,4 @@
-import { toISODate } from './time.js';
+import { minutesUntil, toISODate } from './time.js';
 
 /**
  * Acceso al reloj del sistema, aislado del resto.
@@ -17,4 +17,9 @@ export function today(): string {
 export function currentMinutes(): number {
   const now = new Date();
   return now.getHours() * 60 + now.getMinutes();
+}
+
+/** Minutos que faltan para una cita, según el reloj del sistema. */
+export function minutesUntilBooking(date: string, time: string): number {
+  return minutesUntil(date, time, new Date());
 }

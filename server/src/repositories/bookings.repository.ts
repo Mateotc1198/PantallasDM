@@ -171,3 +171,38 @@ export async function countActiveByDate(
   );
   return new Map(rows.map((row) => [row.booking_date, row.total]));
 }
+
+/**
+ * Mueve una cita activa a otra fecha y hora.
+ *
+ * El mismo índice único parcial que protege la creación protege esto: un
+ * UPDATE hacia una franja ya ocupada choca contra bookings_slot_unico igual
+ * que lo haría un INSERT. No hace falta comprobar nada antes, y por eso no
+ * hay ventana entre la comprobación y el cambio.
+ *
+ * Devuelve null cuando no hay fila activa que mover: o no existe, o ya
+ * estaba cancelada. El servicio decide cuál de las dos cosas es.
+ */
+export async function reschedule(
+  id: string,
+  date: string,
+  time: string,
+): Promise<CreateResult | null> {
+  try {
+    const rows = await query<BookingRow>(
+      `UPDATE bookings
+       SET booking_date = $2::date, booking_time = $3::time
+       WHERE id = $1 AND status = 'activa'
+       RETURNING ${RETURNING_COLUMNS}`,
+      [id, date, time],
+    );
+
+    const row = rows[0];
+    return row === undefined ? null : { ok: true, booking: toBooking(row) };
+  } catch (error) {
+    if (isUniqueViolation(error)) {
+      return { ok: false, reason: 'slot_taken' };
+    }
+    throw error;
+  }
+}

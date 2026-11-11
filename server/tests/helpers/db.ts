@@ -36,3 +36,33 @@ export async function fillDay(barberId: string, date: string): Promise<void> {
     [barberId, date],
   );
 }
+
+/**
+ * Inserta una cita saltándose la API.
+ *
+ * Hace falta para montar escenarios que la API no permite crear a
+ * propósito: una cita de ayer, por ejemplo, que es justo lo que necesita el
+ * test del plazo de cambios. Crearla por POST /bookings devolvería 422, que
+ * es exactamente el comportamiento correcto.
+ */
+export async function insertBooking(datos: {
+  barberId: string;
+  date: string;
+  time: string;
+  customerName?: string;
+  customerPhone?: string;
+}): Promise<string> {
+  const filas = await pool.query<{ id: string }>(
+    `INSERT INTO bookings (barber_id, booking_date, booking_time, customer_name, customer_phone)
+     VALUES ($1, $2::date, $3::time, $4, $5)
+     RETURNING id`,
+    [
+      datos.barberId,
+      datos.date,
+      datos.time,
+      datos.customerName ?? 'Cliente Directo',
+      datos.customerPhone ?? '3001112233',
+    ],
+  );
+  return filas.rows[0].id;
+}
