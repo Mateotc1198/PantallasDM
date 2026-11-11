@@ -88,6 +88,26 @@ export interface Booking {
 /** Cuerpo de POST /bookings: el servidor pone id, status y createdAt. */
 export type CreateBookingInput = Omit<Booking, 'id' | 'status' | 'createdAt'>;
 
+/**
+ * Servicio del catálogo. GET /services
+ *
+ * El precio viaja como entero en pesos y no como decimal: el dinero no se
+ * representa en coma flotante, y el peso colombiano no usa centavos.
+ */
+export interface Service {
+  id: string;
+  name: string;
+  description: string;
+  /** Pesos colombianos, entero. */
+  priceCop: number;
+  category: string;
+  /** URL absoluta de la imagen, o null si no tiene. */
+  imageUrl: string | null;
+}
+
+/** Cuerpo de POST y PUT /services: el servidor pone el id. */
+export type ServiceInput = Omit<Service, 'id'>;
+
 /** Rol de una cuenta del panel. */
 export type UserRole = 'admin' | 'barbero';
 
