@@ -1,28 +1,43 @@
 import { useRouter } from 'expo-router';
-import { useCallback, useMemo } from 'react';
+import { useCallback } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { BarberChip } from '../../src/components/BarberChip';
+import { ErrorState } from '../../src/components/ErrorState';
+import { LoadingState } from '../../src/components/LoadingState';
 import { SlotChip } from '../../src/components/SlotChip';
 import { StepHeader } from '../../src/components/StepHeader';
 import { useBooking } from '../../src/context/BookingContext';
 import { getSlots } from '../../src/data/slots';
+import { useAsync } from '../../src/hooks/useAsync';
 import { useBookingNavigation } from '../../src/hooks/useBookingNavigation';
 import { useRequireBooking } from '../../src/hooks/useRequireBooking';
-import { colors, spacing, typography } from '../../src/theme/tokens';
+import { spacing, typography, type Palette } from '../../src/theme/tokens';
+import { useThemedStyles } from '../../src/theme/useThemedStyles';
 import type { Slot } from '../../src/types/api';
 import { formatShortDate } from '../../src/utils/date';
 
 export default function HoraScreen() {
+  const styles = useThemedStyles(makeStyles);
   const router = useRouter();
   const { goBack, changeBarber } = useBookingNavigation();
   const ready = useRequireBooking(['barber', 'date']);
   const { barber, date, time, setTime } = useBooking();
 
-  const slots = useMemo<Slot[]>(
-    () => (barber === null || date === null ? [] : getSlots(barber.id, date)),
-    [barber, date],
+  const barberId = barber?.id ?? null;
+  const listo = barberId !== null && date !== null;
+
+  /**
+   * Se recarga cada vez que se entra a la pantalla porque el hook vuelve a
+   * ejecutarse al montar. Importa: si el usuario retrocede desde el paso de
+   * datos tras un choque de horario, aquí ve la disponibilidad actualizada y
+   * no la foto de hace un minuto.
+   */
+  const horarios = useAsync<Slot[]>(
+    async () => (listo ? getSlots(barberId, date) : []),
+    [barberId, date],
+    listo,
   );
 
   const selectSlot = useCallback(
@@ -37,6 +52,8 @@ export default function HoraScreen() {
     return null;
   }
 
+  const slots = horarios.data ?? [];
+
   return (
     <SafeAreaView edges={['bottom', 'left', 'right']} style={styles.container}>
       <StepHeader step={4} label="Hora" onBack={goBack} />
@@ -47,9 +64,19 @@ export default function HoraScreen() {
           <Text style={styles.subtitle}>{formatShortDate(date)}</Text>
         </View>
 
-        {slots.length === 0 ? (
+        {horarios.loading ? (
+          <LoadingState label="Consultando horarios..." slow={horarios.slow} />
+        ) : null}
+
+        {horarios.error !== null ? (
+          <ErrorState error={horarios.error} onRetry={horarios.reload} />
+        ) : null}
+
+        {!horarios.loading && horarios.error === null && slots.length === 0 ? (
           <Text style={styles.empty}>Sin horarios disponibles ese día.</Text>
-        ) : (
+        ) : null}
+
+        {slots.length > 0 ? (
           <View style={styles.grid}>
             {slots.map((slot) => (
               <View key={slot.id} style={styles.gridItem}>
@@ -57,13 +84,13 @@ export default function HoraScreen() {
               </View>
             ))}
           </View>
-        )}
+        ) : null}
       </ScrollView>
     </SafeAreaView>
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: Palette) => StyleSheet.create({
   container: {
     flex: 1,
   },

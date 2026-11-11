@@ -1,6 +1,7 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { colors, radius, spacing, typography } from '../theme/tokens';
+import { radius, spacing, typography, type Palette } from '../theme/tokens';
+import { useThemedStyles } from '../theme/useThemedStyles';
 import type { Slot } from '../types/api';
 import { formatTime12h } from '../utils/date';
 
@@ -11,6 +12,7 @@ interface SlotChipProps {
 }
 
 export function SlotChip({ slot, selected, onSelect }: SlotChipProps) {
+  const styles = useThemedStyles(makeStyles);
   const busy = slot.status === 'ocupado';
   const label = formatTime12h(slot.time);
 
@@ -43,7 +45,7 @@ export function SlotChip({ slot, selected, onSelect }: SlotChipProps) {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: Palette) => StyleSheet.create({
   chip: {
     paddingVertical: spacing.sm,
     borderRadius: radius.md,
@@ -82,6 +84,6 @@ const styles = StyleSheet.create({
     textDecorationLine: 'line-through',
   },
   selectedText: {
-    color: '#1A1A1A',
+    color: colors.onPrimary,
   },
 });

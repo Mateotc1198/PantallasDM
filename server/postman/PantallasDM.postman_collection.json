@@ -1,0 +1,1669 @@
+{
+  "info": {
+    "name": "PantallasDM API v1",
+    "description": "API de reservas de barbería.\n\nCómo usarla:\n1. Levanta la base: `docker compose up -d`\n2. Prepara los datos: `npm run db:setup`\n3. Arranca la API: `npm run dev`\n4. Importa también el environment `PantallasDM.postman_environment.json` y selecciónalo arriba a la derecha.\n5. Ejecuta la colección completa con el Collection Runner: las peticiones están ordenadas y se encadenan solas.\n\nLa fecha y el mes de prueba se calculan solos en cada ejecución (siempre futuros), así que la colección no caduca.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Fecha futura que nunca cae en domingo. La mayoria de los barberos",
+          "// atiende ese dia, pero alexander-escobar descansa, asi que se evita para",
+          "// que la coleccion valga con cualquier barberId.",
+          "// Se recalcula en cada ejecucion: la coleccion no caduca con el tiempo.",
+          "const pad = (valor) => String(valor).padStart(2, '0');",
+          "",
+          "const fecha = new Date();",
+          "fecha.setDate(fecha.getDate() + 7);",
+          "if (fecha.getDay() === 0) {",
+          "    fecha.setDate(fecha.getDate() + 1);",
+          "}",
+          "pm.environment.set('fecha', `${fecha.getFullYear()}-${pad(fecha.getMonth() + 1)}-${pad(fecha.getDate())}`);",
+          "",
+          "// Mes siguiente completo: todos sus dias estan por delante, asi que la",
+          "// disponibilidad mensual nunca sale vacia por el paso del tiempo.",
+          "const mes = new Date();",
+          "mes.setDate(1);",
+          "mes.setMonth(mes.getMonth() + 1);",
+          "pm.environment.set('mes', `${mes.getFullYear()}-${pad(mes.getMonth() + 1)}`);",
+          "",
+          "// Hora de destino del aplazamiento: otra franja valida del mismo dia,",
+          "// distinta de la que usa la reserva inicial.",
+          "pm.environment.set('horaAplazada', '16:00');"
+        ]
+      }
+    }
+  ],
+  "item": [
+    {
+      "name": "Salud",
+      "item": [
+        {
+          "name": "1. Health check",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/health",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "health"
+              ]
+            },
+            "description": "Sonda de infraestructura. No forma parte del contrato de negocio: sirve para confirmar de un vistazo que el proceso está vivo."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('la API responde ok', () => {",
+                  "    pm.expect(pm.response.json().status).to.eql('ok');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Autenticación",
+      "item": [
+        {
+          "name": "2. Login como admin",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"{{adminUsername}}\",\n  \"password\": \"{{adminPassword}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "login"
+              ]
+            },
+            "description": "Devuelve un JWT. El token se guarda solo en una variable de entorno; no hay que copiarlo a mano."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "",
+                  "const cuerpo = pm.response.json();",
+                  "",
+                  "pm.test('devuelve token y usuario', () => {",
+                  "    pm.expect(cuerpo.token).to.be.a('string').and.not.empty;",
+                  "    pm.expect(cuerpo.user.role).to.be.oneOf(['admin', 'barbero']);",
+                  "});",
+                  "",
+                  "pm.test('nunca viaja el hash de la contraseña', () => {",
+                  "    pm.expect(JSON.stringify(cuerpo)).to.not.include('$2');",
+                  "});",
+                  "",
+                  "// Encadena: las peticiones protegidas usan este token.",
+                  "pm.environment.set('tokenAdmin', cuerpo.token);"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "3. Login como barbero",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"{{barberoUsername}}\",\n  \"password\": \"{{barberoPassword}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "login"
+              ]
+            },
+            "description": "El mismo endpoint, otro rol. El token resultante solo da acceso a la agenda propia."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "",
+                  "const cuerpo = pm.response.json();",
+                  "",
+                  "pm.test('devuelve token y usuario', () => {",
+                  "    pm.expect(cuerpo.token).to.be.a('string').and.not.empty;",
+                  "    pm.expect(cuerpo.user.role).to.be.oneOf(['admin', 'barbero']);",
+                  "});",
+                  "",
+                  "pm.test('nunca viaja el hash de la contraseña', () => {",
+                  "    pm.expect(JSON.stringify(cuerpo)).to.not.include('$2');",
+                  "});",
+                  "",
+                  "// Encadena: las peticiones protegidas usan este token.",
+                  "pm.environment.set('tokenBarbero', cuerpo.token);"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "4. Quién soy",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenAdmin}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/me",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "me"
+              ]
+            },
+            "description": "Identidad del dueño del token. Útil para que la app sepa el rol tras reiniciar."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('es el administrador', () => {",
+                  "    pm.expect(pm.response.json().role).to.eql('admin');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "5. Credenciales inválidas (401)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"{{adminUsername}}\",\n  \"password\": \"contrasena-incorrecta\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "login"
+              ]
+            },
+            "description": "401. El mensaje es idéntico exista o no el usuario: decir cuál de los dos falló le regalaría al atacante media respuesta."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('401 Unauthorized', () => pm.response.to.have.status(401));",
+                  "pm.test('codigo INVALID_CREDENTIALS', () => {",
+                  "    pm.expect(pm.response.json().error.code).to.eql('INVALID_CREDENTIALS');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Barberos",
+      "item": [
+        {
+          "name": "6. Listar barberos",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/barbers",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "barbers"
+              ]
+            },
+            "description": "Colección de barberos. Devuelve un resumen SIN las reseñas: una lista no debe arrastrar los hijos de cada elemento."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "",
+                  "const barberos = pm.response.json();",
+                  "",
+                  "pm.test('devuelve una lista no vacia', () => {",
+                  "    pm.expect(barberos).to.be.an('array').that.is.not.empty;",
+                  "});",
+                  "",
+                  "pm.test('la lista no incluye reseñas', () => {",
+                  "    pm.expect(barberos[0]).to.not.have.property('reviews');",
+                  "});",
+                  "",
+                  "// Encadena: el resto de peticiones usa este id.",
+                  "pm.environment.set('barberId', barberos[0].id);"
+                ]
+              }
+            }
+          ],
+          "response": [
+            {
+              "name": "200 OK",
+              "originalRequest": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/barbers",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "barbers"
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json; charset=utf-8"
+                }
+              ],
+              "cookie": [],
+              "body": "[\n  {\n    \"id\": \"alexander-escobar\",\n    \"name\": \"Alexander Escobar\",\n    \"specialty\": \"Experto en barba y tratamientos de hidratación capilar.\",\n    \"avatar\": \"https://i.pravatar.cc/240?img=33\",\n    \"rating\": 5,\n    \"reviewsCount\": 2,\n    \"servicesCount\": 3\n  },\n  {\n    \"id\": \"luis-gomez\",\n    \"name\": \"Luis Gomez\",\n    \"specialty\": \"Especialista en fades y cortes modernos.\",\n    \"avatar\": \"https://i.pravatar.cc/240?img=12\",\n    \"rating\": 5,\n    \"reviewsCount\": 2,\n    \"servicesCount\": 3\n  }\n]"
+            }
+          ]
+        },
+        {
+          "name": "7. Obtener barbero por id",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/barbers/{{barberId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "barbers",
+                "{{barberId}}"
+              ]
+            },
+            "description": "Detalle del barbero, ahora sí con sus reseñas. rating y reviewsCount se calculan agregando la tabla reviews, no se guardan duplicados."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "",
+                  "const barbero = pm.response.json();",
+                  "",
+                  "pm.test('el detalle incluye reseñas', () => {",
+                  "    pm.expect(barbero.reviews).to.be.an('array');",
+                  "});",
+                  "",
+                  "pm.test('reviewsCount coincide con las reseñas devueltas', () => {",
+                  "    pm.expect(barbero.reviewsCount).to.eql(barbero.reviews.length);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "8. Barbero inexistente (404)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/barbers/no-existe",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "barbers",
+                "no-existe"
+              ]
+            },
+            "description": "404: el recurso no existe."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('404 Not Found', () => pm.response.to.have.status(404));",
+                  "pm.test('codigo de error BARBER_NOT_FOUND', () => {",
+                  "    pm.expect(pm.response.json().error.code).to.eql('BARBER_NOT_FOUND');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "9. Disponibilidad del dia",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/barbers/{{barberId}}/slots?date={{fecha}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "barbers",
+                "{{barberId}}",
+                "slots"
+              ],
+              "query": [
+                {
+                  "key": "date",
+                  "value": "{{fecha}}"
+                }
+              ]
+            },
+            "description": "Las franjas no están almacenadas: se generan a partir del horario del barbero y se cruzan con las citas activas de ese día."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "",
+                  "const slots = pm.response.json();",
+                  "",
+                  "pm.test('devuelve las 24 franjas de 9:00 a 20:30', () => {",
+                  "    pm.expect(slots).to.have.lengthOf(24);",
+                  "    pm.expect(slots[0].time).to.eql('09:00');",
+                  "    pm.expect(slots[slots.length - 1].time).to.eql('20:30');",
+                  "});",
+                  "",
+                  "pm.test('cada franja tiene estado libre u ocupado', () => {",
+                  "    slots.forEach((slot) => pm.expect(slot.status).to.be.oneOf(['libre', 'ocupado']));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "10. Disponibilidad sin date (400)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/barbers/{{barberId}}/slots",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "barbers",
+                "{{barberId}}",
+                "slots"
+              ]
+            },
+            "description": "400: la petición está mal formada. Falta un parámetro obligatorio."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400 Bad Request', () => pm.response.to.have.status(400));",
+                  "pm.test('el error señala el campo date', () => {",
+                  "    const error = pm.response.json().error;",
+                  "    pm.expect(error.code).to.eql('VALIDATION_ERROR');",
+                  "    pm.expect(error.details[0].field).to.eql('date');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "11. Disponibilidad de fecha pasada (422)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/barbers/{{barberId}}/slots?date=2020-01-15",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "barbers",
+                "{{barberId}}",
+                "slots"
+              ],
+              "query": [
+                {
+                  "key": "date",
+                  "value": "2020-01-15"
+                }
+              ]
+            },
+            "description": "422 y no 400: la petición está perfectamente formada, lo que falla es la regla de negocio."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('422 Unprocessable Entity', () => pm.response.to.have.status(422));",
+                  "pm.test('codigo de error DATE_IN_PAST', () => {",
+                  "    pm.expect(pm.response.json().error.code).to.eql('DATE_IN_PAST');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "12. Disponibilidad del mes",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/barbers/{{barberId}}/availability?month={{mes}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "barbers",
+                "{{barberId}}",
+                "availability"
+              ],
+              "query": [
+                {
+                  "key": "month",
+                  "value": "{{mes}}"
+                }
+              ]
+            },
+            "description": "Días del mes con al menos una franja libre. Existe para que un calendario resuelva el mes entero con una sola petición: pintar 42 celdas preguntando día por día serían 42 peticiones para dibujar una pantalla."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "",
+                  "const cuerpo = pm.response.json();",
+                  "",
+                  "pm.test('devuelve el mes consultado', () => {",
+                  "    pm.expect(cuerpo.month).to.eql(pm.environment.get('mes'));",
+                  "});",
+                  "",
+                  "pm.test('hay dias con cupo y todos son de ese mes', () => {",
+                  "    pm.expect(cuerpo.days).to.be.an('array').that.is.not.empty;",
+                  "    cuerpo.days.forEach((dia) => pm.expect(dia.startsWith(cuerpo.month)).to.be.true);",
+                  "});",
+                  "",
+                  "pm.test('las fechas vienen en orden ascendente', () => {",
+                  "    pm.expect(cuerpo.days).to.eql([...cuerpo.days].sort());",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "13. Disponibilidad con mes invalido (400)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/barbers/{{barberId}}/availability?month=2026-13",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "barbers",
+                "{{barberId}}",
+                "availability"
+              ],
+              "query": [
+                {
+                  "key": "month",
+                  "value": "2026-13"
+                }
+              ]
+            },
+            "description": "El mes 13 no existe. La validación de forma ocurre en el borde HTTP con zod, antes de tocar la base de datos."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400 Bad Request', () => pm.response.to.have.status(400));",
+                  "",
+                  "pm.test('el error identifica la validacion', () => {",
+                  "    pm.expect(pm.response.json().error.code).to.eql('VALIDATION_ERROR');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Servicios",
+      "item": [
+        {
+          "name": "14. Listar servicios",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/services",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "services"
+              ]
+            },
+            "description": "Catálogo público: alimenta la pantalla de servicios que ve cualquier cliente antes de reservar. El precio viaja como entero en pesos, no como decimal."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "",
+                  "const servicios = pm.response.json();",
+                  "",
+                  "pm.test('viene una lista con al menos un servicio', () => {",
+                  "    pm.expect(servicios).to.be.an('array').that.is.not.empty;",
+                  "});",
+                  "",
+                  "pm.test('el precio es un entero de pesos', () => {",
+                  "    servicios.forEach((s) => pm.expect(Number.isInteger(s.priceCop)).to.be.true);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "15. Crear servicio (admin)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenAdmin}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Afeitado clasico\",\n  \"description\": \"Navaja, toalla caliente y balsamo.\",\n  \"priceCop\": 32000,\n  \"category\": \"Barba\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/services",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "services"
+              ]
+            },
+            "description": "Solo el administrador. Guarda el id creado para las peticiones siguientes."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201 Created', () => pm.response.to.have.status(201));",
+                  "",
+                  "pm.test('devuelve la cabecera Location', () => {",
+                  "    pm.expect(pm.response.headers.get('Location')).to.include('/api/v1/services/');",
+                  "});",
+                  "",
+                  "pm.environment.set('serviceId', pm.response.json().id);"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "16. Crear servicio repetido (409)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenAdmin}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Afeitado clasico\",\n  \"description\": \"Navaja, toalla caliente y balsamo.\",\n  \"priceCop\": 32000,\n  \"category\": \"Barba\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/services",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "services"
+              ]
+            },
+            "description": "El nombre duplicado lo rechaza el índice único de la base, no una consulta previa: dos administradores creando a la vez pasarían ambos un control hecho en el código."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('409 Conflict', () => pm.response.to.have.status(409));",
+                  "pm.test('codigo SERVICE_NAME_TAKEN', () => {",
+                  "    pm.expect(pm.response.json().error.code).to.eql('SERVICE_NAME_TAKEN');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "17. Crear servicio sin token (401)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Afeitado clasico\",\n  \"description\": \"Navaja, toalla caliente y balsamo.\",\n  \"priceCop\": 32000,\n  \"category\": \"Barba\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/services",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "services"
+              ]
+            },
+            "description": "Sin sesión no se escribe en el catálogo."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('401 Unauthorized', () => pm.response.to.have.status(401));",
+                  "pm.test('codigo UNAUTHORIZED', () => {",
+                  "    pm.expect(pm.response.json().error.code).to.eql('UNAUTHORIZED');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "18. Crear servicio como barbero (403)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenBarbero}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Afeitado clasico\",\n  \"description\": \"Navaja, toalla caliente y balsamo.\",\n  \"priceCop\": 32000,\n  \"category\": \"Barba\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/services",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "services"
+              ]
+            },
+            "description": "El barbero tiene sesión válida y aun así no puede: el precio de un corte es una decisión del negocio, no de quien lo ejecuta. 403 y no 401 porque sí sabemos quién es."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('403 Forbidden', () => pm.response.to.have.status(403));",
+                  "pm.test('codigo FORBIDDEN', () => {",
+                  "    pm.expect(pm.response.json().error.code).to.eql('FORBIDDEN');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "19. Editar servicio (admin)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenAdmin}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Afeitado clasico\",\n  \"description\": \"Ahora con masaje facial.\",\n  \"priceCop\": 36000,\n  \"category\": \"Barba\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/services/{{serviceId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "services",
+                "{{serviceId}}"
+              ]
+            },
+            "description": "PUT y no PATCH: el cuerpo lleva el servicio completo. Un formulario de edición manda todos los campos igual, y el reemplazo total evita la ambigüedad entre \"campo ausente\" y \"campo que quiero vaciar\"."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "",
+                  "pm.test('conserva el id y aplica el precio nuevo', () => {",
+                  "    const s = pm.response.json();",
+                  "    pm.expect(s.id).to.eql(pm.environment.get('serviceId'));",
+                  "    pm.expect(s.priceCop).to.eql(36000);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "20. Eliminar servicio (admin)",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenAdmin}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/services/{{serviceId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "services",
+                "{{serviceId}}"
+              ]
+            },
+            "description": "204 sin cuerpo: operación correcta que no tiene nada que devolver."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('204 No Content', () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ],
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Citas",
+      "item": [
+        {
+          "name": "21. Crear cita",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"barberId\": \"{{barberId}}\",\n  \"date\": \"{{fecha}}\",\n  \"time\": \"{{hora}}\",\n  \"customerName\": \"Mateo Torres\",\n  \"customerPhone\": \"3001112233\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/bookings",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "bookings"
+              ]
+            },
+            "description": "201 Created con cabecera Location apuntando al recurso nuevo."
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Elige una franja valida al azar para que la coleccion se pueda",
+                  "// repetir sin chocar siempre contra la misma hora.",
+                  "const franjas = [];",
+                  "for (let minutos = 9 * 60; minutos <= 19 * 60 + 30; minutos += 30) {",
+                  "    const hh = String(Math.floor(minutos / 60)).padStart(2, '0');",
+                  "    const mm = String(minutos % 60).padStart(2, '0');",
+                  "    franjas.push(`${hh}:${mm}`);",
+                  "}",
+                  "pm.environment.set('hora', franjas[Math.floor(Math.random() * franjas.length)]);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201 Created', () => pm.response.to.have.status(201));",
+                  "",
+                  "const cita = pm.response.json();",
+                  "",
+                  "pm.test('la cabecera Location apunta al recurso creado', () => {",
+                  "    pm.expect(pm.response.headers.get('Location')).to.eql(`/api/v1/bookings/${cita.id}`);",
+                  "});",
+                  "",
+                  "pm.test('la cita nace activa', () => {",
+                  "    pm.expect(cita.status).to.eql('activa');",
+                  "});",
+                  "",
+                  "// Encadena: las peticiones siguientes usan este id sin copiarlo a mano.",
+                  "pm.environment.set('bookingId', cita.id);"
+                ]
+              }
+            }
+          ],
+          "response": [
+            {
+              "name": "201 Created",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"barberId\": \"luis-gomez\",\n  \"date\": \"2026-10-21\",\n  \"time\": \"10:30\",\n  \"customerName\": \"Mateo Torres\",\n  \"customerPhone\": \"3001112233\"\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/bookings",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "bookings"
+                  ]
+                }
+              },
+              "status": "Created",
+              "code": 201,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json; charset=utf-8"
+                },
+                {
+                  "key": "Location",
+                  "value": "/api/v1/bookings/d4d94fcc-33e6-4cd8-ae4f-2051bb4472dd"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"id\": \"d4d94fcc-33e6-4cd8-ae4f-2051bb4472dd\",\n  \"barberId\": \"luis-gomez\",\n  \"date\": \"2026-10-21\",\n  \"time\": \"10:30\",\n  \"customerName\": \"Mateo Torres\",\n  \"customerPhone\": \"3001112233\",\n  \"status\": \"activa\",\n  \"createdAt\": \"2026-10-15T04:49:26.966Z\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "22. Crear cita duplicada (409)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"barberId\": \"{{barberId}}\",\n  \"date\": \"{{fecha}}\",\n  \"time\": \"{{hora}}\",\n  \"customerName\": \"Otra Persona\",\n  \"customerPhone\": \"3009998877\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/bookings",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "bookings"
+              ]
+            },
+            "description": "409: choca con el estado actual del recurso. El conflicto lo detecta un índice único parcial en Postgres, no una consulta previa: así dos peticiones simultáneas no pueden reservar la misma franja."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('409 Conflict', () => pm.response.to.have.status(409));",
+                  "pm.test('codigo de error BOOKING_SLOT_TAKEN', () => {",
+                  "    pm.expect(pm.response.json().error.code).to.eql('BOOKING_SLOT_TAKEN');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": [
+            {
+              "name": "409 Conflict",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"barberId\": \"luis-gomez\",\n  \"date\": \"2026-10-21\",\n  \"time\": \"10:30\",\n  \"customerName\": \"Otra Persona\",\n  \"customerPhone\": \"3009998877\"\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/bookings",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "bookings"
+                  ]
+                }
+              },
+              "status": "Conflict",
+              "code": 409,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json; charset=utf-8"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"error\": {\n    \"code\": \"BOOKING_SLOT_TAKEN\",\n    \"message\": \"Ese horario ya está reservado.\",\n    \"details\": [\n      { \"field\": \"time\", \"issue\": \"ocupado\" }\n    ]\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "23. Crear cita con datos invalidos (400)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"barberId\": \"{{barberId}}\",\n  \"date\": \"{{fecha}}\",\n  \"time\": \"11:00\",\n  \"customerName\": \"Ab\",\n  \"customerPhone\": \"123\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/bookings",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "bookings"
+              ]
+            },
+            "description": "400: nombre demasiado corto y teléfono que no tiene 10 dígitos. El error enumera TODOS los campos que fallan, no solo el primero."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400 Bad Request', () => pm.response.to.have.status(400));",
+                  "pm.test('reporta los dos campos invalidos', () => {",
+                  "    const campos = pm.response.json().error.details.map((detalle) => detalle.field);",
+                  "    pm.expect(campos).to.include('customerName');",
+                  "    pm.expect(campos).to.include('customerPhone');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "24. Crear cita fuera de franja (422)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"barberId\": \"{{barberId}}\",\n  \"date\": \"{{fecha}}\",\n  \"time\": \"09:17\",\n  \"customerName\": \"Mateo Torres\",\n  \"customerPhone\": \"3001112233\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/bookings",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "bookings"
+              ]
+            },
+            "description": "422: las 09:17 están dentro del horario de atención, pero no son una franja real de 30 minutos."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('422 Unprocessable Entity', () => pm.response.to.have.status(422));",
+                  "pm.test('codigo de error TIME_NOT_IN_SCHEDULE', () => {",
+                  "    pm.expect(pm.response.json().error.code).to.eql('TIME_NOT_IN_SCHEDULE');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "25. Obtener cita por id",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/bookings/{{bookingId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "bookings",
+                "{{bookingId}}"
+              ]
+            },
+            "description": "Demuestra que la cita quedó realmente persistida en PostgreSQL."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('es la cita que acabamos de crear', () => {",
+                  "    pm.expect(pm.response.json().id).to.eql(pm.environment.get('bookingId'));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "26. Aplazar cita (cliente)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customerPhone\": \"3001112233\",\n  \"date\": \"{{fecha}}\",\n  \"time\": \"{{horaAplazada}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/bookings/{{bookingId}}/reschedule",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "bookings",
+                "{{bookingId}}",
+                "reschedule"
+              ]
+            },
+            "description": "El cliente mueve su propia cita sin tener cuenta: su credencial es el UUID de la cita más el teléfono con el que reservó. El horario de destino pasa las mismas reglas que una reserva nueva, y el cambio exige la antelación mínima configurada en BOOKING_CHANGE_WINDOW_HOURS."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "",
+                  "const cita = pm.response.json();",
+                  "",
+                  "pm.test('conserva el id: aplazar no crea una cita nueva', () => {",
+                  "    pm.expect(cita.id).to.eql(pm.environment.get('bookingId'));",
+                  "});",
+                  "",
+                  "pm.test('quedó en la hora nueva y sigue activa', () => {",
+                  "    pm.expect(cita.time).to.eql(pm.environment.get('horaAplazada'));",
+                  "    pm.expect(cita.status).to.eql('activa');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "27. Cancelar con telefono equivocado (403)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customerPhone\": \"3009998877\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/bookings/{{bookingId}}/cancel",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "bookings",
+                "{{bookingId}}",
+                "cancel"
+              ]
+            },
+            "description": "Conocer el código de la cita no basta. Si alguien lo ve de reojo o lo recibe reenviado, todavía necesita saber con qué teléfono se reservó."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('403 Forbidden', () => pm.response.to.have.status(403));",
+                  "",
+                  "pm.test('el error identifica el motivo', () => {",
+                  "    pm.expect(pm.response.json().error.code).to.eql('BOOKING_PHONE_MISMATCH');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "28. Cancelar cita",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenAdmin}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/bookings/{{bookingId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "bookings",
+                "{{bookingId}}"
+              ]
+            },
+            "description": "204 No Content: la operación salió bien y no hay nada que devolver. Cancelar libera la franja, porque el índice único solo cubre las citas activas."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('204 No Content', () => pm.response.to.have.status(204));",
+                  "pm.test('la respuesta no trae cuerpo', () => {",
+                  "    pm.expect(pm.response.text()).to.be.empty;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "29. Cancelar cita ya cancelada (409)",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenAdmin}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/bookings/{{bookingId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "bookings",
+                "{{bookingId}}"
+              ]
+            },
+            "description": "409 y no 404: la cita existe, lo que choca es su estado actual."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('409 Conflict', () => pm.response.to.have.status(409));",
+                  "pm.test('codigo de error BOOKING_ALREADY_CANCELLED', () => {",
+                  "    pm.expect(pm.response.json().error.code).to.eql('BOOKING_ALREADY_CANCELLED');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "30. Cita inexistente (404)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/bookings/11111111-2222-4333-8444-555555555555",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "bookings",
+                "11111111-2222-4333-8444-555555555555"
+              ]
+            },
+            "description": "404: UUID con formato válido que no corresponde a ninguna cita."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('404 Not Found', () => pm.response.to.have.status(404));",
+                  "pm.test('codigo de error BOOKING_NOT_FOUND', () => {",
+                  "    pm.expect(pm.response.json().error.code).to.eql('BOOKING_NOT_FOUND');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "31. Agenda completa (admin)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenAdmin}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/bookings",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "bookings"
+              ]
+            },
+            "description": "El administrador ve las citas de todos los barberos."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('devuelve una lista', () => {",
+                  "    pm.expect(pm.response.json()).to.be.an('array');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "32. Agenda propia (barbero)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenBarbero}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/bookings",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "bookings"
+              ]
+            },
+            "description": "El mismo endpoint con otro token devuelve solo las citas de ese barbero. El servidor ignora cualquier filtro de barbero que mande un barbero."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('solo aparecen citas propias', () => {",
+                  "    const citas = pm.response.json();",
+                  "    const propio = pm.environment.get('barberoBarberId');",
+                  "    citas.forEach((cita) => pm.expect(cita.barberId).to.eql(propio));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "33. Agenda sin token (401)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/bookings",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "bookings"
+              ]
+            },
+            "description": "401: la agenda exige sesión iniciada."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('401 Unauthorized', () => pm.response.to.have.status(401));",
+                  "pm.test('codigo UNAUTHORIZED', () => {",
+                  "    pm.expect(pm.response.json().error.code).to.eql('UNAUTHORIZED');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        }
+      ]
+    }
+  ]
+}

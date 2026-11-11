@@ -1,0 +1,151 @@
+name: CI
+
+# Se ejecuta en cada push a las ramas largas y en cada pull request hacia
+# ellas: lo que se quiere evitar es mezclar código roto, así que la
+# verificación tiene que ocurrir ANTES del merge, no después.
+on:
+  push:
+    branches: [main, Develop]
+  pull_request:
+    branches: [main, Develop]
+
+# Si se empuja dos veces seguidas a la misma rama, la ejecución anterior ya
+# no interesa: se cancela en lugar de gastar minutos en un commit superado.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: '24'
+
+jobs:
+  # ===========================================================================
+  # Aplicación móvil
+  # ===========================================================================
+  app:
+    name: App (lint, tipos y bundle)
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      # npm ci y no npm install: instala exactamente lo del lockfile y falla
+      # si package.json y el lockfile no concuerdan, que es justo lo que se
+      # quiere detectar en integración continua.
+      - run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Tipos
+        run: npm run typecheck
+
+      # El bundle es la prueba de que la aplicación todavía compila de
+      # verdad. El typecheck no la da: Metro resuelve módulos y assets que
+      # TypeScript ni mira.
+      - name: Bundle de Android
+        run: npx expo export --platform android --output-dir .ci-bundle
+
+  # ===========================================================================
+  # API
+  # ===========================================================================
+  api:
+    name: API (lint, tipos y tests)
+    runs-on: ubuntu-latest
+
+    # Los tests de integración van contra una base real, no contra dobles:
+    # comprueban códigos HTTP, restricciones de la base y el índice único
+    # que evita las reservas duplicadas. Nada de eso se puede simular.
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: pantallasdm
+          POSTGRES_PASSWORD: pantallasdm_ci
+          POSTGRES_DB: pantallasdm_test
+        ports:
+          - 5432:5432
+        # Sin el healthcheck, los tests arrancarían antes de que Postgres
+        # acepte conexiones y fallarían de forma intermitente.
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgresql://pantallasdm:pantallasdm_ci@localhost:5432/pantallasdm_test
+      DATABASE_URL_TEST: postgresql://pantallasdm:pantallasdm_ci@localhost:5432/pantallasdm_test
+      DATABASE_SSL: 'false'
+      # Secreto de usar y tirar: esta base vive lo que dura el trabajo y se
+      # destruye al terminar. El de producción vive en Render.
+      JWT_SECRET: secreto-de-integracion-continua-con-mas-de-32-caracteres
+
+    defaults:
+      run:
+        working-directory: server
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+
+      - run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Tipos
+        run: npm run typecheck
+
+      # El esquema lo aplica el global-setup de vitest antes de la suite.
+      - name: Tests con cobertura
+        run: npm run test:coverage
+
+      # El informe se guarda para que el trabajo de Sonar lo recoja: cada
+      # trabajo corre en una máquina distinta y no comparte disco.
+      - name: Guardar la cobertura
+        uses: actions/upload-artifact@v7
+        with:
+          name: cobertura-api
+          path: server/coverage/lcov.info
+          retention-days: 1
+
+  # ===========================================================================
+  # Análisis de calidad
+  # ===========================================================================
+  sonar:
+    name: SonarQube Cloud
+    runs-on: ubuntu-latest
+    needs: [app, api]
+    # En un fork sin el secreto, el análisis se salta en vez de fallar y
+    # teñir de rojo un pull request que está bien.
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # Sonar necesita el historial completo para atribuir cada línea a
+          # su commit y distinguir el código nuevo del heredado.
+          fetch-depth: 0
+
+      - name: Recuperar la cobertura
+        uses: actions/download-artifact@v8
+        with:
+          name: cobertura-api
+          path: server/coverage
+
+      - name: Analizar
+        uses: SonarSource/sonarqube-scan-action@v8
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}

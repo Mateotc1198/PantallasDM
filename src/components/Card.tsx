@@ -1,7 +1,8 @@
 import type { PropsWithChildren } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
-import { colors, radius, spacing } from '../theme/tokens';
+import { radius, spacing, type Palette } from '../theme/tokens';
+import { useThemedStyles } from '../theme/useThemedStyles';
 
 interface CardProps extends PropsWithChildren {
   /** Si se pasa, la tarjeta es presionable y da feedback al tocarla. */
@@ -10,6 +11,7 @@ interface CardProps extends PropsWithChildren {
 }
 
 export function Card({ children, onPress, accessibilityLabel }: CardProps) {
+  const styles = useThemedStyles(makeStyles);
   if (onPress === undefined) {
     return <View style={styles.card}>{children}</View>;
   }
@@ -26,7 +28,7 @@ export function Card({ children, onPress, accessibilityLabel }: CardProps) {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: Palette) => StyleSheet.create({
   card: {
     backgroundColor: colors.surface,
     borderRadius: radius.md,

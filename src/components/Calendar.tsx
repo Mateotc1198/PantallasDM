@@ -1,57 +1,73 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { colors, radius, spacing, typography } from '../theme/tokens';
+import { radius, spacing, typography, type Palette } from '../theme/tokens';
+import { useTheme } from '../theme/ThemeContext';
+import { useThemedStyles } from '../theme/useThemedStyles';
 import {
   buildMonthGrid,
   compareMonths,
+  currentMonthKey,
   formatMonthLabel,
   fromISODate,
+  fromMonthKey,
   isPastDate,
   shiftMonth,
-  startOfToday,
+  toMonthKey,
   WEEKDAY_COLUMNS,
 } from '../utils/date';
 
 const SELECTED_CIRCLE = 36;
 
-interface VisibleMonth {
-  year: number;
-  month: number;
-}
-
 interface CalendarProps {
+  /**
+   * Mes visible, 'YYYY-MM'. Lo controla la pantalla y no el calendario.
+   *
+   * Antes era estado interno, y tenía sentido mientras la disponibilidad se
+   * calculaba en memoria. Ahora el mes visible decide qué le pedimos a la
+   * API, así que tiene que vivir donde se hace la petición.
+   */
+  month: string;
+  onMonthChange: (month: string) => void;
   selectedDate: string | null;
   onSelectDate: (date: string) => void;
   /** La pantalla decide qué día tiene cupo; el calendario solo lo pinta. */
   isDayAvailable: (date: string) => boolean;
+  /**
+   * Permite elegir días ya pasados y retroceder de mes.
+   *
+   * Reservar mira hacia delante, pero una agenda mira hacia atrás: el
+   * administrador necesita consultar qué citas hubo ayer.
+   */
+  allowPast?: boolean;
 }
 
-function currentMonth(): VisibleMonth {
-  const today = startOfToday();
-  return { year: today.getFullYear(), month: today.getMonth() };
-}
-
-export function Calendar({ selectedDate, onSelectDate, isDayAvailable }: CalendarProps) {
-  const [visible, setVisible] = useState<VisibleMonth>(() => {
-    if (selectedDate === null) {
-      return currentMonth();
-    }
-    const date = fromISODate(selectedDate);
-    return { year: date.getFullYear(), month: date.getMonth() };
-  });
-
+export function Calendar({
+  month,
+  onMonthChange,
+  selectedDate,
+  onSelectDate,
+  isDayAvailable,
+  allowPast = false,
+}: CalendarProps) {
+  const styles = useThemedStyles(makeStyles);
+  const { colors } = useTheme();
+  const visible = useMemo(() => fromMonthKey(month), [month]);
   const weeks = useMemo(() => buildMonthGrid(visible.year, visible.month), [visible]);
-  // No se navega a meses ya pasados: no hay nada reservable ahí.
-  const canGoBack = compareMonths(visible, currentMonth()) > 0;
+
+  // Reservando no se navega a meses pasados porque no hay nada que tomar
+  // ahí; consultando la agenda, sí.
+  const canGoBack = allowPast || compareMonths(visible, fromMonthKey(currentMonthKey())) > 0;
 
   const goToPreviousMonth = () => {
-    setVisible((month) => shiftMonth(month.year, month.month, -1));
+    const anterior = shiftMonth(visible.year, visible.month, -1);
+    onMonthChange(toMonthKey(anterior.year, anterior.month));
   };
 
   const goToNextMonth = () => {
-    setVisible((month) => shiftMonth(month.year, month.month, 1));
+    const siguiente = shiftMonth(visible.year, visible.month, 1);
+    onMonthChange(toMonthKey(siguiente.year, siguiente.month));
   };
 
   return (
@@ -97,7 +113,7 @@ export function Calendar({ selectedDate, onSelectDate, isDayAvailable }: Calenda
               return <View key={`vacio-${weekIndex}-${dayIndex}`} style={styles.cell} />;
             }
 
-            const disabled = isPastDate(iso) || !isDayAvailable(iso);
+            const disabled = (!allowPast && isPastDate(iso)) || !isDayAvailable(iso);
             const selected = iso === selectedDate;
             const dayNumber = fromISODate(iso).getDate();
 
@@ -131,7 +147,7 @@ export function Calendar({ selectedDate, onSelectDate, isDayAvailable }: Calenda
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: Palette) => StyleSheet.create({
   container: {
     backgroundColor: colors.surface,
     borderRadius: radius.lg,
@@ -188,7 +204,7 @@ const styles = StyleSheet.create({
     fontWeight: '400',
   },
   daySelected: {
-    color: '#1A1A1A',
+    color: colors.onPrimary,
     fontWeight: '700',
   },
 });

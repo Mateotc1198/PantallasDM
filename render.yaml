@@ -1,0 +1,84 @@
+# ============================================================================
+# Blueprint de Render: crea la base de datos y la API en un solo paso.
+#
+# Cómo usarlo:
+#   1. Render → New → Blueprint
+#   2. Conectar este repositorio y elegir la rama Develop
+#   3. Render lee este archivo y propone los dos recursos
+#   4. Completar CORS_ORIGINS cuando pregunte (ver abajo)
+#
+# Tener la infraestructura en un archivo versionado, y no configurada a mano
+# en un panel, es lo que hace el despliegue reproducible: cualquiera puede
+# recrearlo desde cero y queda constancia de qué se cambió y cuándo.
+# ============================================================================
+
+databases:
+  - name: pantallasdm-db
+    databaseName: pantallasdm
+    user: pantallasdm
+    plan: free
+    # Debe coincidir con la región del servicio web para que puedan hablarse
+    # por la red privada.
+    region: oregon
+
+services:
+  - type: web
+    name: pantallasdm-api
+    runtime: node
+    plan: free
+    region: oregon
+
+    # El backend vive en una subcarpeta del repositorio.
+    rootDir: server
+
+    # --include=dev es obligatorio: TypeScript es devDependency y sin él no
+    # hay build. Render pone NODE_ENV=production, que por defecto omite las
+    # dependencias de desarrollo.
+    buildCommand: npm ci --include=dev && npm run build
+
+    # Aplica el esquema (idempotente, no borra nada) y luego arranca.
+    startCommand: npm run start:prod
+
+    # Render consulta esta ruta para saber si el servicio está vivo.
+    healthCheckPath: /health
+
+    envVars:
+      - key: NODE_ENV
+        value: production
+
+      # Render inyecta la cadena de conexión interna de la base de arriba.
+      # No hay que copiar credenciales a mano a ningún sitio.
+      - key: DATABASE_URL
+        fromDatabase:
+          name: pantallasdm-db
+          property: connectionString
+
+      # La URL interna va por la red privada de Render: no necesita TLS.
+      # Si algún día se conecta desde fuera, poner true.
+      - key: DATABASE_SSL
+        value: "false"
+
+      # sync: false = Render lo pide al desplegar en vez de guardarlo aquí.
+      # Orígenes del navegador permitidos, separados por coma. La app móvil
+      # no usa CORS; esto es solo para Expo Web.
+      - key: CORS_ORIGINS
+        sync: false
+
+      # Secreto de firma de los JWT.
+      #
+      # sync: false significa que Render lo pide al sincronizar y lo guarda
+      # cifrado en su panel: el valor nunca se escribe en el repositorio. Lo
+      # que queda versionado es QUÉ hace falta, no cuál es.
+      #
+      # El servicio valida al arrancar que tenga 32 caracteres o más y se
+      # niega a levantar si no es así, de modo que un despliegue sin este
+      # valor falla en el segundo cero y no dos horas después.
+      - key: JWT_SECRET
+        sync: false
+
+      # Cuentas iniciales del panel. No se declaran aquí porque son
+      # opcionales: scripts/seed-users.mjs termina sin error si faltan y el
+      # servicio arranca igual, simplemente sin cuentas sembradas. Se
+      # configuran en el panel de Render cuando se quieran:
+      #   ADMIN_USERNAME, ADMIN_PASSWORD
+      #   BARBERO_USERNAME, BARBERO_PASSWORD, BARBERO_BARBER_ID

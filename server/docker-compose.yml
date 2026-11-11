@@ -1,0 +1,30 @@
+# Postgres local para desarrollo.
+# Levantar:  docker compose up -d
+# Apagar:    docker compose down
+# Borrar todo (incluidos los datos): docker compose down -v
+services:
+  db:
+    image: postgres:17-alpine
+    container_name: pantallasdm-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-pantallasdm}
+      # Credencial de desarrollo. En produccion va por variable de entorno real.
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-pantallasdm_dev}
+      POSTGRES_DB: ${POSTGRES_DB:-pantallasdm}
+    ports:
+      # Solo loopback: la base no queda expuesta a la red local.
+      # 5434 y no 5432 porque otros contenedores de la maquina ya usan
+      # 5432 y 5433. Cambiable con DB_PORT en el .env.
+      - "127.0.0.1:${DB_PORT:-5434}:5432"
+    volumes:
+      - pantallasdm_pgdata:/var/lib/postgresql/data
+      - ./db/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-pantallasdm} -d ${POSTGRES_DB:-pantallasdm}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  pantallasdm_pgdata:

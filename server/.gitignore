@@ -1,0 +1,11 @@
+node_modules/
+dist/
+coverage/
+
+# Secretos: nunca versionar. Usa .env.example como plantilla.
+.env
+.env.local
+.env.test
+
+# logs locales
+*.log

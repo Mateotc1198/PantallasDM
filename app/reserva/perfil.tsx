@@ -1,17 +1,24 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useCallback } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Avatar } from '../../src/components/Avatar';
 import { Card } from '../../src/components/Card';
+import { ErrorState } from '../../src/components/ErrorState';
+import { LoadingState } from '../../src/components/LoadingState';
 import { PrimaryButton } from '../../src/components/PrimaryButton';
 import { StepHeader } from '../../src/components/StepHeader';
 import { useBooking } from '../../src/context/BookingContext';
+import { getBarberById } from '../../src/data/barbers';
+import { useAsync } from '../../src/hooks/useAsync';
 import { useBookingNavigation } from '../../src/hooks/useBookingNavigation';
 import { useRequireBooking } from '../../src/hooks/useRequireBooking';
-import { colors, spacing, typography } from '../../src/theme/tokens';
+import { spacing, typography, type Palette } from '../../src/theme/tokens';
+import { useTheme } from '../../src/theme/ThemeContext';
+import { useThemedStyles } from '../../src/theme/useThemedStyles';
+import type { Barber } from '../../src/types/api';
 
 const AVATAR_SIZE = 96;
 const MAX_STARS = 5;
@@ -23,6 +30,8 @@ interface StarsProps {
 
 /** Fila de estrellas llenas según el promedio, redondeado al entero cercano. */
 function Stars({ rating, size }: StarsProps) {
+  const styles = useThemedStyles(makeStyles);
+  const { colors } = useTheme();
   const filled = Math.round(rating);
 
   return (
@@ -32,7 +41,7 @@ function Stars({ rating, size }: StarsProps) {
           key={index}
           name={index < filled ? 'star' : 'star-outline'}
           size={size}
-          color={colors.primary}
+          color={colors.primaryText}
         />
       ))}
     </View>
@@ -40,10 +49,27 @@ function Stars({ rating, size }: StarsProps) {
 }
 
 export default function PerfilScreen() {
+  const styles = useThemedStyles(makeStyles);
   const router = useRouter();
   const { goBack } = useBookingNavigation();
   const ready = useRequireBooking(['barber']);
   const { barber } = useBooking();
+
+  const barberId = barber?.id ?? null;
+
+  /**
+   * Solo se pide el detalle, que es lo único que falta: las reseñas.
+   *
+   * El nombre, el avatar, la especialidad y la calificación ya venían en la
+   * lista, así que la cabecera se pinta al instante y el usuario nunca ve la
+   * pantalla en blanco. La espera queda acotada a la parte que de verdad
+   * requiere ir al servidor.
+   */
+  const detalle = useAsync<Barber | null>(
+    async () => (barberId === null ? null : getBarberById(barberId)),
+    [barberId],
+    barberId !== null,
+  );
 
   const goToDate = useCallback(() => {
     router.push('/reserva/fecha');
@@ -52,6 +78,8 @@ export default function PerfilScreen() {
   if (!ready || barber === null) {
     return null;
   }
+
+  const reviews = detalle.data?.reviews ?? [];
 
   return (
     <SafeAreaView edges={['bottom', 'left', 'right']} style={styles.container}>
@@ -69,27 +97,30 @@ export default function PerfilScreen() {
           </View>
         </View>
 
-        <Card>
-          {barber.reviews.map((review, index) => (
-            <View key={review.id}>
-              {index > 0 && <View style={styles.separator} />}
-              <View style={styles.reviewHeader}>
-                <Text style={styles.reviewAuthor}>{review.authorName}</Text>
-                <Stars rating={review.rating} size={12} />
-              </View>
-              <Text style={styles.reviewComment}>{review.comment}</Text>
-            </View>
-          ))}
-        </Card>
+        {detalle.loading ? <LoadingState label="Cargando reseñas..." slow={detalle.slow} /> : null}
 
-        {/* Solo visual: dejar reseñas llega cuando exista el backend. */}
-        <Pressable
-          onPress={() => undefined}
-          accessibilityRole="button"
-          style={({ pressed }) => [styles.addReview, pressed && styles.pressed]}
-        >
-          <Text style={styles.addReviewLabel}>+ Dejar una reseña</Text>
-        </Pressable>
+        {detalle.error !== null ? (
+          <ErrorState error={detalle.error} onRetry={detalle.reload} />
+        ) : null}
+
+        {detalle.data !== null && reviews.length === 0 ? (
+          <Text style={styles.empty}>Este barbero todavía no tiene reseñas.</Text>
+        ) : null}
+
+        {reviews.length > 0 ? (
+          <Card>
+            {reviews.map((review, index) => (
+              <View key={review.id}>
+                {index > 0 && <View style={styles.separator} />}
+                <View style={styles.reviewHeader}>
+                  <Text style={styles.reviewAuthor}>{review.authorName}</Text>
+                  <Stars rating={review.rating} size={12} />
+                </View>
+                <Text style={styles.reviewComment}>{review.comment}</Text>
+              </View>
+            ))}
+          </Card>
+        ) : null}
       </ScrollView>
 
       <View style={styles.footer}>
@@ -99,7 +130,7 @@ export default function PerfilScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: Palette) => StyleSheet.create({
   container: {
     flex: 1,
   },
@@ -140,6 +171,12 @@ const styles = StyleSheet.create({
     ...typography.caption,
     color: colors.textMuted,
   },
+  empty: {
+    ...typography.caption,
+    color: colors.textMuted,
+    textAlign: 'center',
+    paddingVertical: spacing.md,
+  },
   separator: {
     height: 1,
     backgroundColor: colors.border,
@@ -159,17 +196,6 @@ const styles = StyleSheet.create({
     ...typography.caption,
     color: colors.textSecondary,
     lineHeight: 19,
-  },
-  addReview: {
-    alignSelf: 'center',
-  },
-  addReviewLabel: {
-    ...typography.caption,
-    fontWeight: '700',
-    color: colors.primary,
-  },
-  pressed: {
-    opacity: 0.6,
   },
   footer: {
     padding: spacing.md,

@@ -1,0 +1,56 @@
+{
+  "name": "pantallasdm-api",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "API REST de reservas de barberia - Node + Express + PostgreSQL",
+  "main": "dist/server.js",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/server.js",
+    "start:prod": "node scripts/setup-db.mjs && node scripts/seed-users.mjs && node dist/server.js",
+    "typecheck": "tsc -p tsconfig.test.json --noEmit",
+    "db:setup": "node scripts/setup-db.mjs",
+    "db:reset": "node scripts/setup-db.mjs --reset",
+    "db:setup:test": "node scripts/setup-db.mjs --test",
+    "db:reset:test": "node scripts/setup-db.mjs --test --reset",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "users:seed": "node scripts/seed-users.mjs",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix"
+  },
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "cors": "2.8.6",
+    "dotenv": "18.0.8",
+    "express": "5.3.0",
+    "express-rate-limit": "8.7.1",
+    "helmet": "8.3.0",
+    "jsonwebtoken": "^9.0.3",
+    "pg": "8.23.1",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/cors": "2.8.19",
+    "@types/express": "5.0.6",
+    "@types/jsonwebtoken": "^9.0.10",
+    "@types/node": "26.6.5",
+    "@types/pg": "8.23.1",
+    "@types/supertest": "7.2.1",
+    "@vitest/coverage-v8": "^5.0.4",
+    "eslint": "^10.14.0",
+    "globals": "^17.14.0",
+    "supertest": "7.3.1",
+    "tsx": "4.23.15",
+    "typescript": "~6.0.3",
+    "typescript-eslint": "^8.72.2",
+    "vitest": "5.0.4"
+  }
+}
