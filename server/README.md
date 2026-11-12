@@ -233,6 +233,7 @@ Todos bajo `/api/v1`.
 | 22 | `DELETE` | `/barbers/:id/account` | **admin** | Quitar el acceso al panel |
 | 23 | `GET` | `/users` | **admin** | Cuentas de acceso existentes |
 | 24 | `GET` | `/barbers/:id/photo` | público | La foto subida de un barbero (imagen, no JSON) |
+| 25 | `PUT` | `/bookings/:id/status` | **admin · barbero** | Marcar una cita como atendida o "no vino" |
 
 Fuera del contrato de negocio: `GET /health`, sonda de infraestructura.
 
@@ -241,7 +242,7 @@ Fuera del contrato de negocio: `GET /health`, sonda de infraestructura.
 | Rol | Puede |
 | --- | --- |
 | Público (sin cuenta) | Ver barberos y disponibilidad, **reservar**, consultar su cita por el id |
-| `barbero` | Todo lo anterior, más ver y cancelar **sus propias** citas |
+| `barbero` | Todo lo anterior, más ver, cancelar y marcar como atendidas **sus propias** citas |
 | `admin` | Todo lo anterior, sobre **todas** las citas. Además gestiona el catálogo de servicios, la plantilla de barberos y sus cuentas de acceso |
 
 Reservar es público a propósito: el cliente no necesita cuenta, igual que en el
@@ -266,6 +267,7 @@ petición para que un filtro de interfaz deje de proteger nada.
 | `GET /bookings` | `200` | `400` `401` `403` `500` |
 | `GET /bookings/:id` | `200` | `400` `404` `500` |
 | `DELETE /bookings/:id` | `204` | `400` `401` `403` `404` `409` `500` |
+| `PUT /bookings/:id/status` | `200` | `400` `401` `403` `404` `409` `422` `500` |
 | `POST /bookings/:id/cancel` | `204` | `400` `403` `404` `409` `422` `429` `500` |
 | `POST /bookings/:id/reschedule` | `200` | `400` `403` `404` `409` `422` `429` `500` |
 | `GET /services` | `200` | `500` |
@@ -428,6 +430,33 @@ La conversión usa `Intl`, no un desfase fijo de horas, así que también es
 correcta en zonas con horario de verano. La zona se valida al arrancar: una
 errata detiene el despliegue en vez de reventar en la primera petición.
 
+### Cómo termina una cita
+
+Una cita nace `activa` y acaba de una de tres formas:
+
+| Estado | Quién lo pone | Cuándo |
+| --- | --- | --- |
+| `cancelada` | el cliente o el panel | antes de la cita (el cliente, con el plazo de cambios) |
+| `atendida` | el panel | cuando ya llegó la hora de la cita |
+| `no_asistio` | el panel | cuando ya llegó la hora de la cita |
+
+Se marca con `PUT /bookings/:id/status`. El administrador puede marcar cualquier
+cita; el barbero, solo las suyas (`403` si no). El cliente no: diría siempre que
+vino.
+
+- **Antes de la hora, `422 BOOKING_NOT_STARTED`.** Todavía no se sabe cómo termina,
+  y cerrarla liberaría una franja que sigue siendo de alguien.
+- **Una cancelada no se marca** (`409`).
+- **Se puede corregir** entre `atendida` y `no_asistio`, pero no volver a
+  `activa`: reabriría una franja que ya pasó.
+- **Una cita cerrada ya no se cancela ni se aplaza** (`409 BOOKING_ALREADY_CLOSED`),
+  ni desde el panel ni por el cliente: borraría lo que ocurrió de verdad.
+
+La agenda muestra las activas, las atendidas y las no asistidas; las canceladas
+no, porque ya no ocupan ese hueco. El tipo `booking_status` se amplía con
+`ALTER TYPE ... ADD VALUE IF NOT EXISTS`, así que las bases existentes se
+actualizan solas en el siguiente despliegue.
+
 ### El plazo de cambios
 
 `BOOKING_CHANGE_WINDOW_HOURS` (por defecto **2**) fija con cuánta antelación
@@ -572,7 +601,7 @@ La colección se ejecuta entera de corrido con el Collection Runner:
   peticiones siguientes lo reutilizan: no hay que copiar ids a mano.
 - El login **guarda el token** en una variable y las peticiones protegidas lo
   usan como `Bearer`. Tampoco hay que copiar tokens a mano.
-- Las 49 peticiones llevan tests que verifican código HTTP y forma de respuesta.
+- Las 52 peticiones llevan tests que verifican código HTTP y forma de respuesta.
 
 El environment se versiona con las **contraseñas vacías**: una contraseña
 commiteada es una contraseña publicada. Rellena `adminPassword` y
@@ -596,7 +625,7 @@ npm test
 
 - **Unitarios** (`tests/unit/`): la lógica pura de horarios y de identificadores.
   Sin base de datos.
-- **Integración** (`tests/integration/`): los 24 endpoints contra PostgreSQL real
+- **Integración** (`tests/integration/`): los 25 endpoints contra PostgreSQL real
   con supertest.
 
 Corren contra `pantallasdm_test`, una base distinta de la de desarrollo: los

@@ -15,12 +15,12 @@ import { LoadingState } from '../../src/components/LoadingState';
 import { StatTile } from '../../src/components/StatTile';
 import { useAuth } from '../../src/context/AuthContext';
 import { getBarbers } from '../../src/data/barbers';
-import { cancelBooking, getAgenda } from '../../src/data/bookings';
+import { cancelBooking, getAgenda, setBookingStatus } from '../../src/data/bookings';
 import { useAsync } from '../../src/hooks/useAsync';
 import { useTheme } from '../../src/theme/ThemeContext';
 import { spacing, typography, type Palette } from '../../src/theme/tokens';
 import { useThemedStyles } from '../../src/theme/useThemedStyles';
-import type { Booking } from '../../src/types/api';
+import type { Booking, BookingOutcome } from '../../src/types/api';
 import { currentMonthKey, monthKeyOf, startOfToday, toISODate } from '../../src/utils/date';
 import { formatCop } from '../../src/utils/money';
 
@@ -35,17 +35,21 @@ function horaActual(): string {
 }
 
 /**
- * ¿Ya pasó la hora de esta cita?
+ * ¿Ya llegó la hora de esta cita?
  *
  * Las fechas 'YYYY-MM-DD' y las horas 'HH:mm' se ordenan igual como texto que
  * como tiempo, así que basta comparar cadenas.
  */
-function yaPaso(cita: Booking, hoy: string, ahora: string): boolean {
+function yaEmpezo(cita: Booking, hoy: string, ahora: string): boolean {
   if (cita.date !== hoy) {
     return cita.date < hoy;
   }
-  return cita.time < ahora;
+  // <= y no <: a las 10:00 en punto la cita de las 10:00 ya empezó, igual
+  // que la cuenta el servidor.
+  return cita.time <= ahora;
 }
+
+const SIN_CONEXION = 'No pudimos conectar con el servidor. Revisa tu conexión.';
 
 export default function AgendaScreen() {
   const styles = useThemedStyles(makeStyles);
@@ -59,7 +63,8 @@ export default function AgendaScreen() {
   const [calendarioAbierto, setCalendarioAbierto] = useState(false);
   /** null = todos los barberos. Solo lo usa el administrador. */
   const [barberFilter, setBarberFilter] = useState<string | null>(null);
-  const [cancellingId, setCancellingId] = useState<string | null>(null);
+  /** Cita con una acción en curso (cancelar o marcar), para bloquear sus botones. */
+  const [busyId, setBusyId] = useState<string | null>(null);
 
   const esAdmin = user?.role === 'admin';
 
@@ -111,27 +116,45 @@ export default function AgendaScreen() {
             text: 'Sí, cancelar',
             style: 'destructive',
             onPress: () => {
-              setCancellingId(booking.id);
+              setBusyId(booking.id);
               cancelBooking(booking.id)
                 .then(() => {
                   recargarAgenda();
                 })
                 .catch((fallo: unknown) => {
                   const error = toApiError(fallo);
-                  Alert.alert(
-                    'No se pudo cancelar',
-                    error.isNetwork
-                      ? 'No pudimos conectar con el servidor. Revisa tu conexión.'
-                      : error.message,
-                  );
+                  Alert.alert('No se pudo cancelar', error.isNetwork ? SIN_CONEXION : error.message);
                 })
                 .finally(() => {
-                  setCancellingId(null);
+                  setBusyId(null);
                 });
             },
           },
         ],
       );
+    },
+    [recargarAgenda],
+  );
+
+  /**
+   * Marcar no pide confirmación, a diferencia de cancelar: no es
+   * irreversible (se corrige con el otro botón) y es lo que el barbero hace
+   * cita tras cita. Un diálogo cada vez sería un toque de más.
+   */
+  const marcar = useCallback(
+    (booking: Booking, outcome: BookingOutcome) => {
+      setBusyId(booking.id);
+      setBookingStatus(booking.id, outcome)
+        .then(() => {
+          recargarAgenda();
+        })
+        .catch((fallo: unknown) => {
+          const error = toApiError(fallo);
+          Alert.alert('No se pudo marcar', error.isNetwork ? SIN_CONEXION : error.message);
+        })
+        .finally(() => {
+          setBusyId(null);
+        });
     },
     [recargarAgenda],
   );
@@ -163,9 +186,20 @@ export default function AgendaScreen() {
   const hayDatos = !cargandoDia && agenda.error === null;
 
   const ahora = horaActual();
-  const porAtender = citas.filter((cita) => !yaPaso(cita, hoy, ahora)).length;
-  // Las citas sin servicio no suman: se desconoce su precio, no es cero.
-  const estimado = citas.reduce((suma, cita) => suma + (cita.service?.priceCop ?? 0), 0);
+  const pendientes = citas.filter((cita) => cita.status === 'activa').length;
+
+  /**
+   * Un día que ya empezó cuenta lo cobrado: solo las citas atendidas. Uno
+   * futuro, lo que dejarían sus citas si todas se cumplen. Mezclar las dos
+   * cosas en una cifra sumaría dinero que todavía no ha entrado.
+   *
+   * Las citas sin servicio no suman: se desconoce su precio, no es cero.
+   */
+  const esFuturo = selectedDate > hoy;
+  const cuentan = citas.filter((cita) =>
+    esFuturo ? cita.status === 'activa' : cita.status === 'atendida',
+  );
+  const dinero = cuentan.reduce((suma, cita) => suma + (cita.service?.priceCop ?? 0), 0);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -214,8 +248,12 @@ export default function AgendaScreen() {
               valor={String(citas.length)}
               etiqueta={citas.length === 1 ? 'Cita' : 'Citas'}
             />
-            <StatTile icono="time-outline" valor={String(porAtender)} etiqueta="Por atender" />
-            <StatTile icono="cash-outline" valor={formatCop(estimado)} etiqueta="Estimado" />
+            <StatTile icono="time-outline" valor={String(pendientes)} etiqueta="Pendientes" />
+            <StatTile
+              icono="cash-outline"
+              valor={formatCop(dinero)}
+              etiqueta={esFuturo ? 'Estimado' : 'Cobrado'}
+            />
           </View>
         ) : null}
 
@@ -275,9 +313,10 @@ export default function AgendaScreen() {
                     ? (nombrePorBarbero.get(booking.barberId) ?? booking.barberId)
                     : undefined
                 }
+                started={yaEmpezo(booking, hoy, ahora)}
                 onCancel={confirmarCancelacion}
-                cancelling={cancellingId === booking.id}
-                past={yaPaso(booking, hoy, ahora)}
+                onOutcome={marcar}
+                busy={busyId === booking.id}
               />
             ))}
           </View>

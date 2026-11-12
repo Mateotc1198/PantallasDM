@@ -210,7 +210,21 @@ describe('agenda', () => {
     expect(await screen.findByLabelText('Cita: 1')).toBeOnTheScreen();
   });
 
-  it('suma lo que dejarían las citas del día, sin contar las que no tienen servicio', async () => {
+  it('hoy cuenta lo cobrado: solo las citas atendidas', async () => {
+    bookings.getAgenda.mockResolvedValue([
+      { ...CITA, id: 'a', date: HOY, status: 'atendida' },
+      { ...CITA, id: 'b', date: HOY, time: '11:00', status: 'no_asistio' },
+      { ...CITA, id: 'c', date: HOY, time: '12:00' },
+    ]);
+    await sembrarSesion(ADMIN);
+    await renderApp(<AgendaScreen />);
+
+    expect(await screen.findByLabelText('Citas: 3')).toBeOnTheScreen();
+    // 30.000 de la atendida. Ni la que no vino ni la pendiente han pagado.
+    expect(screen.getByLabelText(/Cobrado: .*30\.000/)).toBeOnTheScreen();
+  });
+
+  it('un día futuro estima lo que dejarían sus citas, sin contar las que no tienen servicio', async () => {
     bookings.getAgenda.mockResolvedValue([
       { ...CITA, id: 'a', service: { id: 's1', name: 'Fade', priceCop: 30000 } },
       { ...CITA, id: 'b', time: '11:00', service: { id: 's2', name: 'Barba', priceCop: 20000 } },
@@ -218,24 +232,24 @@ describe('agenda', () => {
     ]);
     await sembrarSesion(ADMIN);
     await renderApp(<AgendaScreen />);
+    // Por el resumen y no por el cliente: las tres citas son del mismo.
+    await screen.findByLabelText('Citas: 3');
 
-    expect(await screen.findByLabelText('Citas: 3')).toBeOnTheScreen();
-    expect(screen.getByLabelText(/Estimado: .*50\.000/)).toBeOnTheScreen();
+    await userEvent.setup().press(screen.getByRole('button', { name: 'Día siguiente' }));
+
+    expect(await screen.findByLabelText(/Estimado: .*50\.000/)).toBeOnTheScreen();
   });
 
-  it('cuenta como "por atender" solo las citas que todavía no han pasado', async () => {
-    // Una de ayer y otra del último minuto de hoy. No se usan dos horas de
-    // hoy a propósito: el resultado dependería de la hora a la que corra el
-    // test, y fallaría justo en el minuto de una de ellas.
-    const ayer = toISODate(new Date(Date.now() - 86_400_000));
+  it('cuenta como pendientes las citas que nadie ha cerrado todavía', async () => {
     bookings.getAgenda.mockResolvedValue([
-      { ...CITA, id: 'a', date: ayer, time: '10:00' },
-      { ...CITA, id: 'b', date: HOY, time: '23:59' },
+      { ...CITA, id: 'a', status: 'atendida' },
+      { ...CITA, id: 'b', time: '11:00' },
+      { ...CITA, id: 'c', time: '12:00' },
     ]);
     await sembrarSesion(ADMIN);
     await renderApp(<AgendaScreen />);
 
-    expect(await screen.findByLabelText('Por atender: 1')).toBeOnTheScreen();
+    expect(await screen.findByLabelText('Pendientes: 2')).toBeOnTheScreen();
   });
 
   it('cada cita dice qué servicio es', async () => {
@@ -1110,5 +1124,90 @@ describe('foto del barbero desde la galería', () => {
         photo: 'BASE64-DE-LA-FOTO',
       }),
     );
+  });
+});
+
+describe('marcar cómo terminó una cita', () => {
+  const AYER = toISODate(new Date(Date.now() - 86_400_000));
+  /** Una cita de ayer: ya empezó, así que se puede marcar. */
+  const CITA_DE_AYER = { ...CITA, date: AYER, time: '10:00' };
+
+  async function abrirAyer() {
+    bookings.getAgenda.mockResolvedValue([CITA_DE_AYER]);
+    await sembrarSesion(ADMIN);
+    await renderApp(<AgendaScreen />);
+    await screen.findByText('Cliente Prueba');
+    const usuario = userEvent.setup();
+    await usuario.press(screen.getByRole('button', { name: 'Día anterior' }));
+    await screen.findByText('Ayer');
+    return usuario;
+  }
+
+  it('una cita que ya empezó y nadie marcó lo avisa', async () => {
+    await abrirAyer();
+
+    expect(await screen.findByText('Sin marcar')).toBeOnTheScreen();
+  });
+
+  it('marcar atendida la envía al servidor y recarga la agenda, sin pedir confirmación', async () => {
+    bookings.setBookingStatus.mockResolvedValue({ ...CITA_DE_AYER, status: 'atendida' });
+    const usuario = await abrirAyer();
+    const pedidas = bookings.getAgenda.mock.calls.length;
+
+    await usuario.press(
+      await screen.findByRole('button', { name: 'Marcar atendida la cita de Cliente Prueba' }),
+    );
+
+    expect(bookings.setBookingStatus).toHaveBeenCalledWith(CITA.id, 'atendida');
+    expect(alerta).not.toHaveBeenCalled();
+    await waitFor(() => expect(bookings.getAgenda.mock.calls.length).toBe(pedidas + 1));
+  });
+
+  it('marcar que no vino envía no_asistio', async () => {
+    bookings.setBookingStatus.mockResolvedValue({ ...CITA_DE_AYER, status: 'no_asistio' });
+    const usuario = await abrirAyer();
+
+    await usuario.press(
+      await screen.findByRole('button', { name: 'Marcar que Cliente Prueba no vino' }),
+    );
+
+    expect(bookings.setBookingStatus).toHaveBeenCalledWith(CITA.id, 'no_asistio');
+  });
+
+  it('si el servidor lo rechaza, muestra su motivo', async () => {
+    bookings.setBookingStatus.mockRejectedValue(
+      new ApiError('Todavía no es la hora de esta cita.', 422, 'BOOKING_NOT_STARTED'),
+    );
+    const usuario = await abrirAyer();
+
+    await usuario.press(
+      await screen.findByRole('button', { name: 'Marcar atendida la cita de Cliente Prueba' }),
+    );
+
+    await waitFor(() =>
+      expect(alerta).toHaveBeenCalledWith('No se pudo marcar', 'Todavía no es la hora de esta cita.'),
+    );
+  });
+
+  it('sin conexión lo dice con palabras de persona', async () => {
+    bookings.setBookingStatus.mockRejectedValue(new ApiError('x', 0, 'NETWORK_ERROR'));
+    const usuario = await abrirAyer();
+
+    await usuario.press(
+      await screen.findByRole('button', { name: 'Marcar atendida la cita de Cliente Prueba' }),
+    );
+
+    await waitFor(() =>
+      expect(alerta).toHaveBeenCalledWith('No se pudo marcar', expect.stringMatching(/conectar/)),
+    );
+  });
+
+  it('una cita de hoy que todavía no empieza ofrece cancelar, no marcar', async () => {
+    bookings.getAgenda.mockResolvedValue([{ ...CITA, date: HOY, time: '23:59' }]);
+    await sembrarSesion(ADMIN);
+    await renderApp(<AgendaScreen />);
+
+    expect(await screen.findByRole('button', { name: /Cancelar la cita/ })).toBeOnTheScreen();
+    expect(screen.queryByRole('button', { name: /Marcar/ })).not.toBeOnTheScreen();
   });
 });

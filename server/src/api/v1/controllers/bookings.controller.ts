@@ -4,6 +4,7 @@ import { requireUser } from '../../../middleware/authenticate.js';
 import * as bookingsService from '../../../services/bookings.service.js';
 import {
   agendaQuerySchema,
+  bookingOutcomeSchema,
   bookingIdParamsSchema,
   createBookingSchema,
   customerActionSchema,
@@ -44,6 +45,21 @@ export async function cancel(req: Request, res: Response): Promise<void> {
 
   // 204: operación exitosa que no tiene nada que devolver. Sin cuerpo.
   res.status(204).end();
+}
+
+/**
+ * PUT /api/v1/bookings/:id/status
+ *
+ * PUT sobre el subrecurso "estado": dice cómo quedó, y repetirlo deja lo
+ * mismo. Devuelve la cita entera para que el panel la pinte sin otra
+ * petición.
+ */
+export async function setStatus(req: Request, res: Response): Promise<void> {
+  const { id } = bookingIdParamsSchema.parse(req.params);
+  const { status } = bookingOutcomeSchema.parse(req.body);
+
+  const booking = await bookingsService.setOutcome(id, status, requireUser(req));
+  res.status(200).json(booking);
 }
 
 /**

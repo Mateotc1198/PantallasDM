@@ -68,6 +68,14 @@ router.get('/:id', bookingsController.getById);
 // la cita sea tuya.
 router.delete('/:id', authenticate, authorize('admin', 'barbero'), bookingsController.cancel);
 
+// Marcar cómo terminó: atendida o no asistida. Mismo acceso que cancelar.
+router.put(
+  '/:id/status',
+  authenticate,
+  authorize('admin', 'barbero'),
+  bookingsController.setStatus,
+);
+
 // Y estas son las del cliente, sin sesión: su credencial es el UUID de la
 // cita más el teléfono con el que reservó.
 router.post('/:id/cancel', customerActionLimiter, bookingsController.cancelByCustomer);

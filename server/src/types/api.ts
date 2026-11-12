@@ -12,8 +12,18 @@
 /** Disponibilidad de una franja horaria. */
 export type SlotStatus = 'libre' | 'ocupado';
 
-/** Estado de una cita. Concepto del servidor: el frontend solo lee citas activas. */
-export type BookingStatus = 'activa' | 'cancelada';
+/**
+ * Estado de una cita.
+ *
+ *   activa      reservada y pendiente
+ *   cancelada   la anuló el cliente o el panel
+ *   atendida    ya pasó y el barbero la atendió
+ *   no_asistio  ya pasó y el cliente no vino
+ */
+export type BookingStatus = 'activa' | 'cancelada' | 'atendida' | 'no_asistio';
+
+/** Cómo terminó una cita que nadie canceló. Lo marca el panel. */
+export type BookingOutcome = 'atendida' | 'no_asistio';
 
 export interface Review {
   id: string;

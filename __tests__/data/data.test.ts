@@ -14,6 +14,7 @@ import {
   getAgenda,
   getBooking,
   rescheduleBooking,
+  setBookingStatus,
 } from '../../src/data/bookings';
 import { createService, deleteService, getServices, updateService } from '../../src/data/services';
 import { getMonthAvailability, getSlots } from '../../src/data/slots';
@@ -316,5 +317,25 @@ describe('citas que llegan sin el campo service', () => {
     api.apiGet.mockResolvedValue({ ...citaAntigua, service: null });
 
     expect((await getBooking('abc-123')).service).toBeNull();
+  });
+});
+
+describe('marcar cómo terminó una cita', () => {
+  it('setBookingStatus usa PUT sobre el estado de esa cita', async () => {
+    api.apiPut.mockResolvedValue({ id: 'abc-123', status: 'atendida' });
+
+    await setBookingStatus('abc-123', 'atendida');
+
+    expect(api.apiPut).toHaveBeenCalledWith('/api/v1/bookings/abc-123/status', {
+      status: 'atendida',
+    });
+  });
+
+  it('normaliza la cita que devuelve, como el resto de la capa', async () => {
+    api.apiPut.mockResolvedValue({ id: 'abc-123', status: 'no_asistio' });
+
+    const cita = await setBookingStatus('abc-123', 'no_asistio');
+
+    expect(cita.service).toBeNull();
   });
 });

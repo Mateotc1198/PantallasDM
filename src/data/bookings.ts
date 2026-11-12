@@ -1,5 +1,5 @@
-import { apiDelete, apiGet, apiPost } from '../api/client';
-import type { Booking, CreateBookingInput } from '../types/api';
+import { apiDelete, apiGet, apiPost, apiPut } from '../api/client';
+import type { Booking, BookingOutcome, CreateBookingInput } from '../types/api';
 
 /**
  * Recurso /bookings.
@@ -100,6 +100,19 @@ export async function getAgenda(filtros: {
     barberId: filtros.barberId,
   });
   return citas.map(normalizar);
+}
+
+/**
+ * PUT /bookings/:id/status — marca cómo terminó la cita. Requiere sesión.
+ *
+ * Solo desde la hora de la cita: antes el servidor responde 422. Se puede
+ * repetir para corregir entre atendida y no asistida.
+ */
+export async function setBookingStatus(id: string, status: BookingOutcome): Promise<Booking> {
+  const cita = await apiPut<BookingDeLaApi>(`/api/v1/bookings/${encodeURIComponent(id)}/status`, {
+    status,
+  });
+  return normalizar(cita);
 }
 
 /**
