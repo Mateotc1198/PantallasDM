@@ -496,3 +496,31 @@ describe('layouts', () => {
     await expect(renderApp(<Layout />)).resolves.toBeDefined();
   });
 });
+
+describe('orden de las categorías', () => {
+  it('ordena en español: las tildes y las mayúsculas no descolocan nada', async () => {
+    // Un sort() sin comparador ordena por código de carácter: dejaría
+    // "Zeta" antes que "barba" y "Ácidos" al final de todo.
+    const servicio = (id: string, category: string): Service => ({
+      id,
+      name: `Servicio ${id}`,
+      description: '',
+      priceCop: 1000,
+      category,
+      imageUrl: null,
+    });
+    services.getServices.mockResolvedValue([
+      servicio('1', 'Zeta'),
+      servicio('2', 'barba'),
+      servicio('3', 'Ácidos'),
+    ]);
+    await renderApp(<ServiciosScreen />);
+    await screen.findByText('Servicio 1');
+
+    const nombres = screen
+      .getAllByRole('radio')
+      .map((opcion) => opcion.props.accessibilityLabel as string);
+
+    expect(nombres).toEqual(['Todos', 'Ácidos', 'barba', 'Zeta']);
+  });
+});

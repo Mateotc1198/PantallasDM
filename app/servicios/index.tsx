@@ -50,7 +50,10 @@ export default function ServiciosScreen() {
   /** Las categorías salen de los datos: el admin puede inventar una nueva. */
   const categorias = useMemo(() => {
     const vistas = new Set((catalogo.data ?? []).map((servicio) => servicio.category));
-    return [...vistas].sort();
+    // Con comparador de idioma: el sort() a secas ordena por código de
+    // carácter, así que "Árbol" quedaría después de "Zapato" y las
+    // mayúsculas antes que todas las minúsculas.
+    return [...vistas].sort((a, b) => a.localeCompare(b, 'es'));
   }, [catalogo.data]);
 
   const visibles = useMemo(() => {

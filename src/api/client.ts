@@ -28,11 +28,27 @@ const DEFAULT_BASE_URL = 'https://pantallasdm-api.onrender.com';
  */
 const TIMEOUT_MS = 60_000;
 
+/**
+ * Quita las barras del final recorriendo la cadena, sin expresión regular.
+ *
+ * La versión con /\/+$/ es de tiempo superlineal: ante una entrada con
+ * muchas barras seguidas que no terminan la cadena, el motor reintenta el
+ * emparejamiento desde cada una. Aquí la entrada viene de configuración y no
+ * de un usuario, pero un bucle es igual de legible y no tiene ese caso malo.
+ */
+function sinBarrasFinales(valor: string): string {
+  let fin = valor.length;
+  while (fin > 0 && valor[fin - 1] === '/') {
+    fin -= 1;
+  }
+  return valor.slice(0, fin);
+}
+
 function resolveBaseUrl(): string {
   const configured = process.env.EXPO_PUBLIC_API_URL?.trim();
   const url =
     configured !== undefined && configured.length > 0 ? configured : DEFAULT_BASE_URL;
-  const limpia = url.replace(/\/+$/, '');
+  const limpia = sinBarrasFinales(url);
 
   // En una compilación de release no se habla por HTTP: el tráfico incluiría
   // datos personales del cliente en claro. En desarrollo sí, porque un
