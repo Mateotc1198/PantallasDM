@@ -10,6 +10,10 @@ export const ERROR_CODES = {
   ROUTE_NOT_FOUND: 'ROUTE_NOT_FOUND',
   INTERNAL_ERROR: 'INTERNAL_ERROR',
   TOO_MANY_REQUESTS: 'TOO_MANY_REQUESTS',
+  /** 400 - el cuerpo no es JSON válido: ni siquiera se pudo leer. */
+  MALFORMED_JSON: 'MALFORMED_JSON',
+  /** 413 - el cuerpo supera el límite de tamaño. */
+  PAYLOAD_TOO_LARGE: 'PAYLOAD_TOO_LARGE',
 
   /** 401 - no sabemos quién eres. */
   UNAUTHORIZED: 'UNAUTHORIZED',
