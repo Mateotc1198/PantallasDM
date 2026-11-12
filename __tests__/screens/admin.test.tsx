@@ -218,9 +218,13 @@ describe('agenda', () => {
     expect(screen.getByLabelText(/Estimado: .*50\.000/)).toBeOnTheScreen();
   });
 
-  it('cuenta como "por atender" solo las citas de hoy cuya hora no ha pasado', async () => {
+  it('cuenta como "por atender" solo las citas que todavía no han pasado', async () => {
+    // Una de ayer y otra del último minuto de hoy. No se usan dos horas de
+    // hoy a propósito: el resultado dependería de la hora a la que corra el
+    // test, y fallaría justo en el minuto de una de ellas.
+    const ayer = toISODate(new Date(Date.now() - 86_400_000));
     bookings.getAgenda.mockResolvedValue([
-      { ...CITA, id: 'a', date: HOY, time: '00:00' },
+      { ...CITA, id: 'a', date: ayer, time: '10:00' },
       { ...CITA, id: 'b', date: HOY, time: '23:59' },
     ]);
     await sembrarSesion(ADMIN);
