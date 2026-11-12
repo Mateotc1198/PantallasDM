@@ -154,8 +154,8 @@ cd server && npm test       # API (necesita la base de datos de pruebas)
 
 | | Pruebas | Qué cubren |
 | --- | --- | --- |
-| App | 401 | Pantallas, componentes, navegación, sesión y capa de datos |
-| API | 237 | Los 23 endpoints contra PostgreSQL real, roles y reglas de negocio |
+| App | 407 | Pantallas, componentes, navegación, sesión y capa de datos |
+| API | 245 | Los 23 endpoints contra PostgreSQL real, roles y reglas de negocio |
 | Postman | 46 peticiones | El flujo completo, ejecutable de corrido |
 
 En cada cambio, GitHub Actions ejecuta el lint, la comprobación de tipos y las
