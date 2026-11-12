@@ -26,6 +26,8 @@ export const ERROR_CODES = {
   BARBER_CLOSED_THAT_DAY: 'BARBER_CLOSED_THAT_DAY',
   /** 409 - ya hay un barbero con ese nombre. */
   BARBER_NAME_TAKEN: 'BARBER_NAME_TAKEN',
+  /** 404 - ese barbero no tiene una foto subida. */
+  BARBER_PHOTO_NOT_FOUND: 'BARBER_PHOTO_NOT_FOUND',
   /** 409 - tiene citas activas pendientes y no se puede dar de baja. */
   BARBER_HAS_BOOKINGS: 'BARBER_HAS_BOOKINGS',
 

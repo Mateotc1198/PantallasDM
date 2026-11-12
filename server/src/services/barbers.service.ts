@@ -1,10 +1,11 @@
 import { randomBytes } from 'node:crypto';
 
-import { ConflictError, NotFoundError } from '../errors/app-error.js';
+import { BadRequestError, ConflictError, NotFoundError } from '../errors/app-error.js';
 import { ERROR_CODES } from '../errors/codes.js';
 import * as barbersRepository from '../repositories/barbers.repository.js';
 import type { Barber, BarberInput, BarberSummary } from '../types/api.js';
 import { today } from '../utils/clock.js';
+import { decodeImage, type DecodedImage } from '../utils/image.js';
 import { slugify } from '../utils/slug.js';
 
 /**
@@ -49,6 +50,61 @@ function sufijoAlAzar(): string {
   return randomBytes(2).toString('hex');
 }
 
+/**
+ * Ruta de esta API que sirve la foto subida de un barbero.
+ *
+ * El servicio conoce esta ruta porque es lo que se guarda como avatar del
+ * barbero: es un dato, no una decisión de enrutado. Va sin dominio; el
+ * dominio lo pone la capa HTTP al responder, que es quien sabe por dónde
+ * llegó la petición.
+ *
+ * El parámetro v cambia en cada subida. La imagen se sirve con caché de un
+ * año, así que sin él un teléfono seguiría enseñando la foto vieja después
+ * de cambiarla: con una URL distinta, es para él una imagen distinta.
+ */
+function photoPath(id: string): string {
+  return `${photoRoute(id)}?v=${Date.now()}`;
+}
+
+function photoRoute(id: string): string {
+  return `/api/v1/barbers/${encodeURIComponent(id)}/photo`;
+}
+
+/**
+ * ¿Es esta URL la de la foto subida de este mismo barbero?
+ *
+ * Una versión anterior de la app, al editar, reenvía siempre la URL que
+ * recibió como avatar. Si el barbero tiene foto subida, esa URL es la de esta
+ * API, y tomarla como "foto externa nueva" haría borrar la imagen guardada:
+ * la ficha quedaría apuntando a una foto que ya no existe. Reconocerla y
+ * tratarla como "sin cambios" mantiene compatible la app ya instalada.
+ *
+ * Se compara solo la ruta: el dominio con el que llegó depende de por dónde
+ * se conectó cada cliente.
+ */
+function esSuPropiaFoto(id: string, avatar: string): boolean {
+  try {
+    return new URL(avatar).pathname === photoRoute(id);
+  } catch {
+    return false;
+  }
+}
+
+/** Decodifica la foto que llegó en la petición, o lanza 400 con el motivo. */
+function leerFoto(photo: string | undefined): DecodedImage | null {
+  if (photo === undefined) {
+    return null;
+  }
+
+  const resultado = decodeImage(photo);
+  if (!resultado.ok) {
+    throw new BadRequestError(ERROR_CODES.VALIDATION_ERROR, 'La foto no es válida.', [
+      { field: 'photo', issue: resultado.reason },
+    ]);
+  }
+  return resultado.image;
+}
+
 function noEncontrado(id: string): NotFoundError {
   return new NotFoundError(ERROR_CODES.BARBER_NOT_FOUND, `No existe un barbero con id "${id}".`);
 }
@@ -91,10 +147,22 @@ export async function assertExists(id: string): Promise<void> {
  */
 export async function create(input: BarberInput): Promise<BarberSummary> {
   const base = slugify(input.name);
+  // Se valida antes de tocar la base: una foto inválida no debe gastar un id.
+  const photo = leerFoto(input.photo);
 
   for (let intento = 1; intento <= MAX_INTENTOS_DE_ID; intento += 1) {
     const id = intento === 1 ? base : `${base}-${sufijoAlAzar()}`;
-    const resultado = await barbersRepository.create(id, input, HORARIO_POR_DEFECTO);
+    const resultado = await barbersRepository.create(
+      id,
+      {
+        name: input.name,
+        specialty: input.specialty,
+        // El DTO garantiza que al crear llega una de las dos.
+        avatarUrl: photo !== null ? photoPath(id) : (input.avatar ?? null),
+        photo,
+      },
+      HORARIO_POR_DEFECTO,
+    );
 
     if (resultado.ok) {
       return resultado.barber;
@@ -113,7 +181,18 @@ export async function create(input: BarberInput): Promise<BarberSummary> {
 }
 
 export async function update(id: string, input: BarberInput): Promise<BarberSummary> {
-  const resultado = await barbersRepository.update(id, input);
+  const photo = leerFoto(input.photo);
+  const urlNueva =
+    input.avatar !== undefined && !esSuPropiaFoto(id, input.avatar) ? input.avatar : null;
+
+  const resultado = await barbersRepository.update(id, {
+    name: input.name,
+    specialty: input.specialty,
+    // Sin foto ni URL nueva queda en null, que para el repositorio es
+    // "no tocar la que tiene".
+    avatarUrl: photo !== null ? photoPath(id) : urlNueva,
+    photo,
+  });
 
   // null y { ok: false } son cosas distintas: la primera es que el barbero
   // no existe (404), la segunda que el nombre nuevo ya lo usa otro (409).
@@ -124,6 +203,19 @@ export async function update(id: string, input: BarberInput): Promise<BarberSumm
     throw nombreRepetido();
   }
   return resultado.barber;
+}
+
+/** La foto subida de un barbero, para servirla. 404 si no tiene. */
+export async function getPhoto(id: string): Promise<DecodedImage> {
+  const photo = await barbersRepository.findPhoto(id);
+
+  if (photo === null) {
+    throw new NotFoundError(
+      ERROR_CODES.BARBER_PHOTO_NOT_FOUND,
+      `El barbero "${id}" no tiene una foto subida.`,
+    );
+  }
+  return photo;
 }
 
 /**

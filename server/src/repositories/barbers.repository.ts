@@ -1,5 +1,6 @@
 import { query } from '../config/database.js';
-import type { Barber, BarberInput, BarberSummary, Review } from '../types/api.js';
+import type { Barber, BarberSummary, Review } from '../types/api.js';
+import type { DecodedImage } from '../utils/image.js';
 
 /**
  * Único lugar del backend donde vive SQL.
@@ -34,6 +35,20 @@ interface ReviewRow {
   author_name: string;
   comment: string;
   rating: number;
+}
+
+/**
+ * Lo que se escribe de un barbero, ya resuelto por el servicio.
+ *
+ * avatarUrl y photo no son independientes: con foto subida, avatarUrl es la
+ * ruta de esta API que la sirve. null en avatarUrl significa "no tocar la
+ * que tiene", y solo tiene sentido al editar.
+ */
+export interface BarberWrite {
+  name: string;
+  specialty: string;
+  avatarUrl: string | null;
+  photo: DecodedImage | null;
 }
 
 /** La regla de horario con la que nace un barbero nuevo. */
@@ -170,15 +185,24 @@ export async function exists(id: string): Promise<boolean> {
  */
 export async function create(
   id: string,
-  input: BarberInput,
+  input: BarberWrite,
   schedule: DefaultSchedule,
 ): Promise<WriteResult> {
   try {
+    // La foto entra en la misma sentencia que el barbero y su horario: si
+    // algo falla no queda un barbero cuya foto apunta a una imagen que no
+    // llegó a guardarse. El WHERE la omite cuando el barbero usa una URL.
     await query(
       `WITH nuevo AS (
          INSERT INTO barbers (id, name, specialty, avatar_url)
          VALUES ($1, $2, $3, $4)
          RETURNING id
+       ),
+       foto AS (
+         INSERT INTO barber_photos (barber_id, content, content_type)
+         SELECT nuevo.id, $8::bytea, $9::text
+         FROM nuevo
+         WHERE $8::bytea IS NOT NULL
        )
        INSERT INTO barber_schedules
          (barber_id, weekday, first_slot_at, last_slot_at, slot_minutes)
@@ -189,10 +213,12 @@ export async function create(
         id,
         input.name,
         input.specialty,
-        input.avatar,
+        input.avatarUrl,
         schedule.firstSlotAt,
         schedule.lastSlotAt,
         schedule.slotMinutes,
+        input.photo?.content ?? null,
+        input.photo?.contentType ?? null,
       ],
     );
   } catch (error) {
@@ -216,14 +242,46 @@ export async function create(
  * Reemplaza los datos de la ficha. El id no cambia nunca: viaja en URLs y lo
  * referencian las citas. null cuando no existe (o está de baja).
  */
-export async function update(id: string, input: BarberInput): Promise<WriteResult | null> {
+export async function update(id: string, input: BarberWrite): Promise<WriteResult | null> {
   try {
+    // Tres casos en una sola sentencia, para que la ficha y la foto no
+    // puedan quedar desacompasadas:
+    //   - llega una foto: se guarda (o reemplaza) y avatar_url apunta a ella;
+    //   - llega una URL externa: se usa, y la foto subida que hubiera se borra
+    //     para no dejar bytes huérfanos que ya nadie va a pedir;
+    //   - no llega ninguna: COALESCE deja avatar_url como estaba.
     const rows = await query<{ id: string }>(
-      `UPDATE barbers
-       SET name = $2, specialty = $3, avatar_url = $4
-       WHERE id = $1 AND deleted_at IS NULL
-       RETURNING id`,
-      [id, input.name, input.specialty, input.avatar],
+      `WITH actualizado AS (
+         UPDATE barbers
+         SET name = $2, specialty = $3, avatar_url = COALESCE($4::text, avatar_url)
+         WHERE id = $1 AND deleted_at IS NULL
+         RETURNING id
+       ),
+       foto AS (
+         INSERT INTO barber_photos (barber_id, content, content_type)
+         SELECT actualizado.id, $5::bytea, $6::text
+         FROM actualizado
+         WHERE $5::bytea IS NOT NULL
+         ON CONFLICT (barber_id) DO UPDATE
+           SET content      = EXCLUDED.content,
+               content_type = EXCLUDED.content_type,
+               updated_at   = now()
+       ),
+       limpieza AS (
+         DELETE FROM barber_photos
+         WHERE barber_id IN (SELECT id FROM actualizado)
+           AND $5::bytea IS NULL
+           AND $4::text IS NOT NULL
+       )
+       SELECT id FROM actualizado`,
+      [
+        id,
+        input.name,
+        input.specialty,
+        input.avatarUrl,
+        input.photo?.content ?? null,
+        input.photo?.contentType ?? null,
+      ],
     );
 
     if (rows.length === 0) {
@@ -238,6 +296,22 @@ export async function update(id: string, input: BarberInput): Promise<WriteResul
 
   const barber = await findSummaryById(id);
   return barber === null ? null : { ok: true, barber };
+}
+
+/**
+ * La foto subida de un barbero activo. null si no tiene (usa una URL
+ * externa) o si el barbero está de baja.
+ */
+export async function findPhoto(id: string): Promise<DecodedImage | null> {
+  const rows = await query<{ content: Buffer; content_type: DecodedImage['contentType'] }>(
+    `SELECT p.content, p.content_type
+     FROM barber_photos p
+     JOIN barbers b ON b.id = p.barber_id
+     WHERE p.barber_id = $1 AND b.deleted_at IS NULL`,
+    [id],
+  );
+  const row = rows[0];
+  return row === undefined ? null : { content: row.content, contentType: row.content_type };
 }
 
 /**

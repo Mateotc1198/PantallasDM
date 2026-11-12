@@ -5,6 +5,7 @@ import helmet from 'helmet';
 import v1Routes from './api/v1/routes/index.js';
 import { env } from './config/env.js';
 import { errorHandler } from './middleware/error-handler.js';
+import { leerJson } from './middleware/json-body.js';
 import { notFoundHandler } from './middleware/not-found.js';
 
 /**
@@ -48,8 +49,10 @@ app.use(
   }),
 );
 
-// Límite de tamaño: un JSON gigante es una forma barata de tumbar el proceso.
-app.use(express.json({ limit: '10kb' }));
+// Cuerpo JSON con límite de 10 KB: un JSON gigante es una forma barata de
+// ocupar el proceso. Las dos rutas que reciben la foto de un barbero lo
+// leen ellas mismas, con más margen y después de comprobar la sesión.
+app.use(leerJson);
 
 /**
  * Sonda de salud. No forma parte del contrato de negocio: existe para el

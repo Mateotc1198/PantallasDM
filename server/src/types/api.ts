@@ -54,7 +54,19 @@ export type BarberSummary = Omit<Barber, 'reviews'>;
  * El id lo deriva el servidor del nombre; la calificación y los conteos se
  * calculan. Un cliente no puede fijar ninguno de los tres.
  */
-export type BarberInput = Pick<Barber, 'name' | 'specialty' | 'avatar'>;
+export interface BarberInput {
+  name: string;
+  specialty: string;
+  /** URL https de una foto alojada en otro sitio. */
+  avatar?: string;
+  /**
+   * La foto misma, en base64 (JPEG o PNG). La sube la app desde la galería.
+   *
+   * Va una de las dos, nunca ambas. Al crear es obligatoria una; al editar,
+   * si no va ninguna se conserva la foto que ya tenía.
+   */
+  photo?: string;
+}
 
 /** Franja horaria. GET /barbers/:id/slots?date=YYYY-MM-DD */
 export interface Slot {

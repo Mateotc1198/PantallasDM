@@ -103,6 +103,9 @@ const BARBEROS_DEL_SEED = ['luis-gomez', 'alexander-escobar'];
 export async function resetBarbers(): Promise<void> {
   await pool.query('DELETE FROM bookings WHERE barber_id <> ALL($1)', [BARBEROS_DEL_SEED]);
   await pool.query('DELETE FROM barbers WHERE id <> ALL($1)', [BARBEROS_DEL_SEED]);
+  // Las fotos subidas a los barberos del seed no se van con el DELETE de
+  // arriba: su fila de barbers sigue ahí.
+  await pool.query('DELETE FROM barber_photos');
 
   // Se quita la baja y se restauran los datos por si un test los editó.
   await pool.query(
