@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { ImageBackground, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Image, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { BARBERIA, enlaceWhatsApp } from '../config/barberia';
 import { radius, spacing, typography, type Palette } from '../theme/tokens';
@@ -32,7 +32,20 @@ export function FooterCta({ onAgendar, onVerServicios }: FooterCtaProps) {
   const styles = useThemedStyles(makeStyles);
 
   return (
-    <ImageBackground source={{ uri: FONDO }} style={styles.fondo}>
+    <View style={styles.fondo}>
+      {/*
+        La fotografía va detrás del contenido como una Image posicionada, no
+        con ImageBackground: React Native lo marcó obsoleto y avisa de que
+        desaparecerá. Es decorativa, así que se oculta a los lectores de
+        pantalla en vez de anunciarse como una imagen sin descripcion.
+      */}
+      <Image
+        source={{ uri: FONDO }}
+        style={StyleSheet.absoluteFill}
+        resizeMode="cover"
+        accessible={false}
+        accessibilityIgnoresInvertColors
+      />
       <View style={styles.velo}>
         <Text style={styles.eyebrow}>Agenda tu cita</Text>
         <Text style={styles.titulo}>
@@ -96,7 +109,7 @@ export function FooterCta({ onAgendar, onVerServicios }: FooterCtaProps) {
           Hecho con dedicación para los que cuidan su imagen.
         </Text>
       </View>
-    </ImageBackground>
+    </View>
   );
 }
 
