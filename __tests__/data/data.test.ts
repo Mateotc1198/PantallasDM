@@ -113,18 +113,21 @@ describe('citas', () => {
   };
 
   it('createBooking envía la cita completa por POST', async () => {
+    api.apiPost.mockResolvedValue({ id: 'abc-123' });
     await createBooking(entrada);
 
     expect(api.apiPost).toHaveBeenCalledWith('/api/v1/bookings', entrada);
   });
 
   it('getBooking consulta por id', async () => {
+    api.apiGet.mockResolvedValue({ id: 'abc-123' });
     await getBooking('abc-123');
 
     expect(api.apiGet).toHaveBeenCalledWith('/api/v1/bookings/abc-123');
   });
 
   it('getAgenda pasa los dos filtros', async () => {
+    api.apiGet.mockResolvedValue([]);
     await getAgenda({ date: '2026-12-01', barberId: 'luis-gomez' });
 
     expect(api.apiGet).toHaveBeenCalledWith('/api/v1/bookings', {
@@ -134,6 +137,7 @@ describe('citas', () => {
   });
 
   it('getAgenda sin barbero deja ese filtro sin definir', async () => {
+    api.apiGet.mockResolvedValue([]);
     await getAgenda({ date: '2026-12-01' });
 
     expect(api.apiGet).toHaveBeenCalledWith('/api/v1/bookings', {
@@ -158,6 +162,7 @@ describe('citas', () => {
   });
 
   it('rescheduleBooking manda teléfono, fecha y hora nuevas', async () => {
+    api.apiPost.mockResolvedValue({ id: 'abc-123' });
     await rescheduleBooking('abc-123', '3000000000', '2026-12-02', '15:00');
 
     expect(api.apiPost).toHaveBeenCalledWith('/api/v1/bookings/abc-123/reschedule', {
@@ -244,5 +249,72 @@ describe('cuentas de acceso', () => {
     await removeBarberAccount('a/b');
 
     expect(api.apiDelete).toHaveBeenCalledWith('/api/v1/barbers/a%2Fb/account');
+  });
+});
+
+describe('citas que llegan sin el campo service', () => {
+  // Lo que responde un servidor anterior a "el servicio en la cita".
+  const citaAntigua = {
+    id: 'abc-123',
+    barberId: 'luis-gomez',
+    date: '2026-12-01',
+    time: '10:00',
+    customerName: 'Cliente Prueba',
+    customerPhone: '3000000000',
+    status: 'activa',
+    createdAt: '2026-11-10T10:00:00.000Z',
+  };
+  const fade = { id: 's1', name: 'Fade', priceCop: 30000 };
+
+  it('createBooking deja service en null en vez de undefined', async () => {
+    api.apiPost.mockResolvedValue(citaAntigua);
+
+    const cita = await createBooking({
+      barberId: 'luis-gomez',
+      date: '2026-12-01',
+      time: '10:00',
+      customerName: 'Cliente Prueba',
+      customerPhone: '3000000000',
+      serviceId: 's1',
+    });
+
+    // toBeNull y no toBeFalsy: la diferencia entre null y undefined es
+    // exactamente lo que hacía caerse a la pantalla de confirmación.
+    expect(cita.service).toBeNull();
+    expect(cita.id).toBe('abc-123');
+  });
+
+  it('getBooking hace lo mismo', async () => {
+    api.apiGet.mockResolvedValue(citaAntigua);
+
+    expect((await getBooking('abc-123')).service).toBeNull();
+  });
+
+  it('rescheduleBooking hace lo mismo', async () => {
+    api.apiPost.mockResolvedValue(citaAntigua);
+
+    const cita = await rescheduleBooking('abc-123', '3000000000', '2026-12-02', '11:00');
+
+    expect(cita.service).toBeNull();
+  });
+
+  it('getAgenda normaliza cada cita de la lista', async () => {
+    api.apiGet.mockResolvedValue([citaAntigua, { ...citaAntigua, id: 'def-456', service: fade }]);
+
+    const agenda = await getAgenda({});
+
+    expect(agenda.map((cita) => cita.service)).toEqual([null, fade]);
+  });
+
+  it('una cita que sí trae servicio lo conserva intacto', async () => {
+    api.apiGet.mockResolvedValue({ ...citaAntigua, service: fade });
+
+    expect((await getBooking('abc-123')).service).toEqual(fade);
+  });
+
+  it('un service en null se queda en null', async () => {
+    api.apiGet.mockResolvedValue({ ...citaAntigua, service: null });
+
+    expect((await getBooking('abc-123')).service).toBeNull();
   });
 });

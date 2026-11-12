@@ -137,17 +137,71 @@ export function daysOfMonth(month: string): string[] {
 }
 
 /**
- * Minutos que faltan desde `now` hasta una fecha y hora civiles.
+ * La hora de reloj en un lugar: qué día es allí y cuántos minutos van del día.
+ *
+ * Es lo que marca el reloj de pared de la barbería, sin zona horaria: justo
+ * el mismo tipo de dato que la fecha y la hora de una cita, y por eso se
+ * pueden comparar entre sí.
+ */
+export interface WallClock {
+  /** 'YYYY-MM-DD' */
+  date: string;
+  /** Minutos desde la medianoche, de 0 a 1439. */
+  minutes: number;
+}
+
+const MINUTOS_POR_DIA = 1440;
+const MS_POR_DIA = 86_400_000;
+
+/**
+ * Qué hora de reloj es en una zona horaria en un instante dado.
+ *
+ * Recibe el instante en vez de leer el reloj para seguir siendo pura: con un
+ * instante fijo se puede probar "en Bogotá todavía es día 11" sin depender de
+ * dónde ni cuándo corra el test.
+ *
+ * Usa Intl y no restar un desfase fijo de horas: Intl conoce la zona de
+ * verdad, incluidos los cambios de horario de los países que los tienen.
+ */
+export function wallClockIn(instant: Date, timeZone: string): WallClock {
+  const partes = new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    // Sin esto, la medianoche puede salir como "24" en vez de "00".
+    hourCycle: 'h23',
+  }).formatToParts(instant);
+
+  const valor = (tipo: Intl.DateTimeFormatPartTypes): string =>
+    partes.find((parte) => parte.type === tipo)?.value ?? '';
+
+  return {
+    date: `${valor('year')}-${valor('month')}-${valor('day')}`,
+    minutes: Number(valor('hour')) * 60 + Number(valor('minute')),
+  };
+}
+
+/** Días civiles entre dos fechas 'YYYY-MM-DD'. Negativo si `to` es anterior. */
+function daysBetween(from: string, to: string): number {
+  const enUtc = (iso: string): number => {
+    const [year, month, day] = iso.split('-').map(Number);
+    // Date.UTC solo como calculadora de calendario: en UTC todos los días
+    // duran lo mismo, así que la resta da un número entero de días.
+    return Date.UTC(year, month - 1, day);
+  };
+  return Math.round((enUtc(to) - enUtc(from)) / MS_POR_DIA);
+}
+
+/**
+ * Minutos que faltan desde una hora de reloj hasta una fecha y hora civiles.
  * Negativo si ya pasaron.
  *
- * Recibe el instante en vez de leer el reloj para seguir siendo pura: esa
- * es la diferencia entre poder probar "faltan 90 minutos" con un test
- * determinista y tener que esperar a que den las nueve.
+ * Las dos puntas son horas de reloj del mismo lugar, así que es aritmética de
+ * calendario: no interviene ninguna zona horaria.
  */
-export function minutesUntil(date: string, time: string, now: Date): number {
-  const [year, month, day] = date.split('-').map(Number);
-  const [hours, minutes] = time.split(':').map(Number);
-  const objetivo = new Date(year, month - 1, day, hours, minutes, 0, 0);
-
-  return Math.round((objetivo.getTime() - now.getTime()) / 60_000);
+export function minutesBetween(now: WallClock, date: string, time: string): number {
+  return daysBetween(now.date, date) * MINUTOS_POR_DIA + toMinutes(time) - now.minutes;
 }

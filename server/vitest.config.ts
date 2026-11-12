@@ -16,6 +16,13 @@ export default defineConfig({
       // dotenv no pisa una variable que ya existe, de modo que este valor
       // manda en todos los entornos.
       CORS_ORIGINS: 'https://app.ejemplo.test',
+      // Los ayudantes de los tests construyen "hoy", "ayer" y "dentro de una
+      // semana" con el reloj de la máquina. Para que el servidor bajo prueba
+      // entienda lo mismo por "hoy", su zona de negocio es la de la máquina:
+      // así la suite da igual en un portátil en Colombia y en el CI en UTC.
+      // Que la conversión a otra zona funciona lo prueban, con instantes
+      // fijos, los tests unitarios de wallClockIn.
+      BUSINESS_TIMEZONE: Intl.DateTimeFormat().resolvedOptions().timeZone,
     },
     coverage: {
       provider: 'v8',

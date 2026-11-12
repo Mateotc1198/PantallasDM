@@ -388,6 +388,24 @@ personal.
 Por eso son `POST` y no `DELETE`: necesitan cuerpo, y `DELETE` con cuerpo está
 mal soportado por buena parte de los clientes HTTP.
 
+### La hora es la de la barbería, no la del servidor
+
+Las fechas y horas de este dominio son **civiles**: "el 14 a las 9:00" significa
+las nueve en el local. Por eso "hoy" y "ahora" se calculan en la zona horaria
+de la barbería (`BUSINESS_TIMEZONE`, por defecto `America/Bogota`) y no con el
+reloj de la máquina.
+
+No es un detalle teórico. El servidor de Render corre en UTC, cinco horas por
+delante de Colombia, y con su reloj a pelo:
+
+- a las 7:00 pm ya era "mañana", y se rechazaba reservar para hoy;
+- las franjas de las cinco horas siguientes se daban por pasadas;
+- el plazo de cambios de dos horas se convertía en siete.
+
+La conversión usa `Intl`, no un desfase fijo de horas, así que también es
+correcta en zonas con horario de verano. La zona se valida al arrancar: una
+errata detiene el despliegue en vez de reventar en la primera petición.
+
 ### El plazo de cambios
 
 `BOOKING_CHANGE_WINDOW_HOURS` (por defecto **2**) fija con cuánta antelación
