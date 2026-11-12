@@ -58,6 +58,14 @@ services:
       - key: DATABASE_SSL
         value: "false"
 
+      # Zona horaria de la barbería. "Hoy" y "ahora" se calculan con ella y
+      # no con el reloj de esta máquina, que corre en UTC: sin esto, a las
+      # 7 de la tarde en Colombia el servidor ya creía que era mañana. El
+      # código trae este mismo valor por defecto; se declara aquí para que se
+      # vea de un vistazo con qué hora razona el despliegue.
+      - key: BUSINESS_TIMEZONE
+        value: America/Bogota
+
       # sync: false = Render lo pide al desplegar en vez de guardarlo aquí.
       # Orígenes del navegador permitidos, separados por coma. La app móvil
       # no usa CORS; esto es solo para Expo Web.

@@ -8,6 +8,22 @@ import { z } from 'zod';
  * muera en el segundo 0 con un mensaje claro, y no que reviente a las dos
  * horas en medio de una petición con un error incomprensible.
  */
+/**
+ * ¿Es una zona horaria que este Node conoce?
+ *
+ * Intl lanza RangeError con una zona inventada. Se comprueba al arrancar para
+ * que una errata ("America/Bogotá") detenga el despliegue con un mensaje
+ * claro, en vez de reventar en la primera petición que pregunte la hora.
+ */
+function esZonaHorariaValida(zona: string): boolean {
+  try {
+    new Intl.DateTimeFormat('en-CA', { timeZone: zona });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().int().positive().max(65535).default(3000),
@@ -32,6 +48,17 @@ const envSchema = z.object({
    * exigir recompilar y volver a desplegar.
    */
   BOOKING_CHANGE_WINDOW_HOURS: z.coerce.number().int().min(0).max(168).default(2),
+  /**
+   * Zona horaria de la barbería, en formato IANA.
+   *
+   * "Hoy" y "ahora" se calculan con ella, no con el reloj del servidor: los
+   * servidores en la nube corren en UTC y la barbería no. Tiene un valor por
+   * defecto para que el despliegue no dependa de acordarse de configurarla.
+   */
+  BUSINESS_TIMEZONE: z
+    .string()
+    .default('America/Bogota')
+    .refine(esZonaHorariaValida, 'debe ser una zona horaria IANA, p. ej. America/Bogota'),
 });
 
 const parsed = envSchema.safeParse(process.env);
@@ -64,6 +91,7 @@ export const env = {
   /** El servicio razona en minutos; la configuración se escribe en horas. */
   bookingChangeWindowMinutes: raw.BOOKING_CHANGE_WINDOW_HOURS * 60,
   bookingChangeWindowHours: raw.BOOKING_CHANGE_WINDOW_HOURS,
+  businessTimezone: raw.BUSINESS_TIMEZONE,
   jwtExpiresInSeconds: raw.JWT_EXPIRES_IN_SECONDS,
   /** Lista blanca de CORS. Vacía = no se permite ningún origen del navegador. */
   corsOrigins: raw.CORS_ORIGINS.split(',')
