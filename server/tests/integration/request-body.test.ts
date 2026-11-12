@@ -66,13 +66,30 @@ describe('cuerpo de la petición ilegible', () => {
   });
 });
 
+/**
+ * El origen permitido lo fija vitest.config.ts (CORS_ORIGINS), no el .env de
+ * cada máquina: estos tests dan lo mismo en local y en el CI.
+ */
+const ORIGEN_PERMITIDO = 'https://app.ejemplo.test';
+
 describe('CORS', () => {
-  it('el preflight anuncia PUT, que usan la edición de servicios y la de barberos', async () => {
+  it('el preflight de un origen permitido anuncia PUT', async () => {
+    // PUT lo usan la edición de servicios y la de barberos.
     const respuesta = await request(app)
       .options('/api/v1/barbers/luis-gomez')
-      .set('Origin', 'https://ejemplo.com')
+      .set('Origin', ORIGEN_PERMITIDO)
       .set('Access-Control-Request-Method', 'PUT');
 
+    expect(respuesta.headers['access-control-allow-origin']).toBe(ORIGEN_PERMITIDO);
     expect(respuesta.headers['access-control-allow-methods']).toContain('PUT');
+  });
+
+  it('un origen fuera de la lista blanca no recibe permiso', async () => {
+    const respuesta = await request(app)
+      .options('/api/v1/barbers/luis-gomez')
+      .set('Origin', 'https://sitio-ajeno.test')
+      .set('Access-Control-Request-Method', 'PUT');
+
+    expect(respuesta.headers['access-control-allow-origin']).toBeUndefined();
   });
 });
