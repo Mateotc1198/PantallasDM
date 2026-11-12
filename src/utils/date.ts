@@ -167,3 +167,15 @@ export function currentMonthKey(): string {
   const today = startOfToday();
   return toMonthKey(today.getFullYear(), today.getMonth());
 }
+
+/**
+ * La fecha que queda `days` días después (o antes, si es negativo).
+ *
+ * Opera en hora local a través de Date, que ya resuelve los cambios de mes y
+ * de año: sumar 1 al 31 de enero da el 1 de febrero sin aritmética a mano.
+ */
+export function shiftDays(iso: string, days: number): string {
+  const date = fromISODate(iso);
+  date.setDate(date.getDate() + days);
+  return toISODate(date);
+}

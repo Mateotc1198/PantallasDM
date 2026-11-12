@@ -10,6 +10,7 @@ import * as authData from '../../src/data/auth';
 import * as barbersData from '../../src/data/barbers';
 import * as bookingsData from '../../src/data/bookings';
 import * as servicesData from '../../src/data/services';
+import * as usersData from '../../src/data/users';
 import type { Service } from '../../src/types/api';
 import { toISODate } from '../../src/utils/date';
 import { reiniciarDobles } from '../helpers/dobles';
@@ -33,11 +34,13 @@ jest.mock('../../src/data/auth');
 jest.mock('../../src/data/barbers');
 jest.mock('../../src/data/bookings');
 jest.mock('../../src/data/services');
+jest.mock('../../src/data/users');
 
 const auth = jest.mocked(authData);
 const barbers = jest.mocked(barbersData);
 const bookings = jest.mocked(bookingsData);
 const services = jest.mocked(servicesData);
+const users = jest.mocked(usersData);
 
 const HOY = toISODate(new Date());
 
@@ -63,13 +66,15 @@ async function pulsarEnAlerta(texto: string) {
 
 beforeEach(() => {
   reiniciarRouter();
-  reiniciarDobles(auth, barbers, bookings, services);
+  reiniciarDobles(auth, barbers, bookings, services, users);
   jest.restoreAllMocks();
   alerta = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
 
   barbers.getBarbers.mockResolvedValue([BARBERO, OTRO_BARBERO]);
   bookings.getAgenda.mockResolvedValue([CITA]);
   services.getServices.mockResolvedValue([FADE]);
+  // Solo luis-gomez tiene cuenta; alexander-escobar no.
+  users.getUsers.mockResolvedValue([ADMIN, USUARIO_BARBERO]);
 });
 
 describe('inicio de sesión', () => {
@@ -193,10 +198,82 @@ describe('agenda', () => {
     expect(bookings.getAgenda).toHaveBeenCalledWith({ date: HOY, barberId: undefined });
   });
 
-  it('cuenta las citas en singular y en plural', async () => {
+  it('resume el día: cuántas citas hay, en singular y en plural', async () => {
     await sembrarSesion(ADMIN);
     await renderApp(<AgendaScreen />);
-    expect(await screen.findByText('1 cita')).toBeOnTheScreen();
+
+    expect(await screen.findByLabelText('Cita: 1')).toBeOnTheScreen();
+  });
+
+  it('suma lo que dejarían las citas del día, sin contar las que no tienen servicio', async () => {
+    bookings.getAgenda.mockResolvedValue([
+      { ...CITA, id: 'a', service: { id: 's1', name: 'Fade', priceCop: 30000 } },
+      { ...CITA, id: 'b', time: '11:00', service: { id: 's2', name: 'Barba', priceCop: 20000 } },
+      { ...CITA, id: 'c', time: '12:00', service: null },
+    ]);
+    await sembrarSesion(ADMIN);
+    await renderApp(<AgendaScreen />);
+
+    expect(await screen.findByLabelText('Citas: 3')).toBeOnTheScreen();
+    expect(screen.getByLabelText(/Estimado: .*50\.000/)).toBeOnTheScreen();
+  });
+
+  it('cuenta como "por atender" solo las citas de hoy cuya hora no ha pasado', async () => {
+    bookings.getAgenda.mockResolvedValue([
+      { ...CITA, id: 'a', date: HOY, time: '00:00' },
+      { ...CITA, id: 'b', date: HOY, time: '23:59' },
+    ]);
+    await sembrarSesion(ADMIN);
+    await renderApp(<AgendaScreen />);
+
+    expect(await screen.findByLabelText('Por atender: 1')).toBeOnTheScreen();
+  });
+
+  it('cada cita dice qué servicio es', async () => {
+    await sembrarSesion(ADMIN);
+    await renderApp(<AgendaScreen />);
+
+    expect(await screen.findByText(/Fade · .*30\.000/)).toBeOnTheScreen();
+  });
+
+  it('las flechas pasan al día siguiente y al anterior', async () => {
+    await sembrarSesion(ADMIN);
+    await renderApp(<AgendaScreen />);
+    await screen.findByText('Cliente Prueba');
+    const usuario = userEvent.setup();
+    const manana = toISODate(new Date(Date.now() + 86_400_000));
+
+    await usuario.press(screen.getByRole('button', { name: 'Día siguiente' }));
+    await waitFor(() =>
+      expect(bookings.getAgenda).toHaveBeenLastCalledWith({ date: manana, barberId: undefined }),
+    );
+
+    await usuario.press(screen.getByRole('button', { name: 'Día anterior' }));
+    await waitFor(() =>
+      expect(bookings.getAgenda).toHaveBeenLastCalledWith({ date: HOY, barberId: undefined }),
+    );
+  });
+
+  it('abre en "Hoy" con el calendario recogido, y lo despliega al tocar la fecha', async () => {
+    await sembrarSesion(ADMIN);
+    await renderApp(<AgendaScreen />);
+    await screen.findByText('Cliente Prueba');
+
+    expect(screen.getByText('Hoy')).toBeOnTheScreen();
+    expect(screen.queryByText('LUN')).not.toBeOnTheScreen();
+
+    await userEvent.setup().press(screen.getByRole('button', { name: /Elegir otro día/ }));
+
+    expect(screen.getByText('LUN')).toBeOnTheScreen();
+  });
+
+  it('al barbero no se le repite su nombre en cada cita, ni se le pide la lista de barberos', async () => {
+    await sembrarSesion(USUARIO_BARBERO);
+    await renderApp(<AgendaScreen />);
+    await screen.findByText('Cliente Prueba');
+
+    expect(screen.queryByText('Luis Gomez')).not.toBeOnTheScreen();
+    expect(barbers.getBarbers).not.toHaveBeenCalled();
   });
 
   it('un día sin citas lo dice', async () => {
@@ -205,7 +282,7 @@ describe('agenda', () => {
     await renderApp(<AgendaScreen />);
 
     expect(await screen.findByText('No hay citas para este día.')).toBeOnTheScreen();
-    expect(screen.getByText('0 citas')).toBeOnTheScreen();
+    expect(screen.getByLabelText('Citas: 0')).toBeOnTheScreen();
   });
 
   it('si la agenda falla ofrece reintentar', async () => {
@@ -314,7 +391,8 @@ describe('gestión del catálogo', () => {
   it('lista los servicios con categoría y precio', async () => {
     await abrirComoAdmin();
 
-    expect(screen.getByText(/Cortes · \$30\.000/)).toBeOnTheScreen();
+    expect(screen.getByText('Cortes')).toBeOnTheScreen();
+    expect(screen.getByText(/30\.000/)).toBeOnTheScreen();
   });
 
   it('un catálogo vacío invita a crear el primero', async () => {
@@ -736,5 +814,159 @@ describe('gestión de barberos', () => {
       // No se recargó: no cambió nada.
       expect(barbers.getBarbers).toHaveBeenCalledTimes(1);
     });
+  });
+});
+
+describe('acceso de los barberos al panel', () => {
+  beforeEach(() => {
+    usePathname.mockReturnValue('/admin/barberos');
+  });
+
+  async function abrirComoAdmin() {
+    await sembrarSesion(ADMIN);
+    await renderApp(<AdminBarberosScreen />);
+    await screen.findByText('Luis Gomez');
+    return userEvent.setup();
+  }
+
+  it('cada barbero dice si puede entrar al panel y con qué usuario', async () => {
+    await abrirComoAdmin();
+
+    expect(await screen.findByText('Entra como luis')).toBeOnTheScreen();
+    expect(screen.getByText('Sin acceso al panel')).toBeOnTheScreen();
+  });
+
+  it('a quien no tiene cuenta se le ofrece dársela', async () => {
+    const usuario = await abrirComoAdmin();
+
+    await usuario.press(
+      screen.getByRole('button', { name: 'Gestionar el acceso de Alexander Escobar' }),
+    );
+
+    expect(screen.getByText('Acceso de Alexander Escobar')).toBeOnTheScreen();
+    expect(screen.getByRole('button', { name: 'Dar acceso' })).toBeOnTheScreen();
+    expect(screen.queryByRole('button', { name: 'Quitar acceso' })).not.toBeOnTheScreen();
+  });
+
+  it('valida antes de enviar: una contraseña corta no llega al servidor', async () => {
+    const usuario = await abrirComoAdmin();
+    await usuario.press(
+      screen.getByRole('button', { name: 'Gestionar el acceso de Alexander Escobar' }),
+    );
+
+    await usuario.type(screen.getByLabelText('Usuario'), 'alex');
+    await usuario.type(screen.getByLabelText('Contraseña'), '1234567');
+    await usuario.press(screen.getByRole('button', { name: 'Dar acceso' }));
+
+    expect(screen.getByText(/al menos 8 caracteres/)).toBeOnTheScreen();
+    expect(users.setBarberAccount).not.toHaveBeenCalled();
+  });
+
+  it('rechaza un usuario con espacios o símbolos', async () => {
+    const usuario = await abrirComoAdmin();
+    await usuario.press(
+      screen.getByRole('button', { name: 'Gestionar el acceso de Alexander Escobar' }),
+    );
+
+    await usuario.type(screen.getByLabelText('Usuario'), 'alex escobar');
+    await usuario.type(screen.getByLabelText('Contraseña'), 'clave-segura-2026');
+    await usuario.press(screen.getByRole('button', { name: 'Dar acceso' }));
+
+    expect(screen.getByText(/de 3 a 30 letras/)).toBeOnTheScreen();
+    expect(users.setBarberAccount).not.toHaveBeenCalled();
+  });
+
+  it('crea la cuenta con el usuario en minúsculas y recarga las cuentas', async () => {
+    users.setBarberAccount.mockResolvedValue({
+      id: 'u3',
+      username: 'alex',
+      role: 'barbero',
+      barberId: 'alexander-escobar',
+    });
+    const usuario = await abrirComoAdmin();
+    await usuario.press(
+      screen.getByRole('button', { name: 'Gestionar el acceso de Alexander Escobar' }),
+    );
+
+    await usuario.type(screen.getByLabelText('Usuario'), '  Alex  ');
+    await usuario.type(screen.getByLabelText('Contraseña'), 'clave-segura-2026');
+    await usuario.press(screen.getByRole('button', { name: 'Dar acceso' }));
+
+    await waitFor(() =>
+      expect(users.setBarberAccount).toHaveBeenCalledWith('alexander-escobar', {
+        username: 'alex',
+        password: 'clave-segura-2026',
+      }),
+    );
+    await waitFor(() => expect(users.getUsers).toHaveBeenCalledTimes(2));
+    expect(screen.queryByText('Acceso de Alexander Escobar')).not.toBeOnTheScreen();
+  });
+
+  it('la contraseña se escribe oculta', async () => {
+    const usuario = await abrirComoAdmin();
+    await usuario.press(
+      screen.getByRole('button', { name: 'Gestionar el acceso de Alexander Escobar' }),
+    );
+
+    expect(screen.getByLabelText('Contraseña').props.secureTextEntry).toBe(true);
+  });
+
+  it('si el usuario ya está en uso muestra el motivo del servidor y no cierra', async () => {
+    users.setBarberAccount.mockRejectedValue(
+      new ApiError('Ese nombre de usuario ya está en uso.', 409, 'USERNAME_TAKEN'),
+    );
+    const usuario = await abrirComoAdmin();
+    await usuario.press(
+      screen.getByRole('button', { name: 'Gestionar el acceso de Alexander Escobar' }),
+    );
+
+    await usuario.type(screen.getByLabelText('Usuario'), 'admin');
+    await usuario.type(screen.getByLabelText('Contraseña'), 'clave-segura-2026');
+    await usuario.press(screen.getByRole('button', { name: 'Dar acceso' }));
+
+    expect(await screen.findByText('Ese nombre de usuario ya está en uso.')).toBeOnTheScreen();
+    expect(screen.getByText('Acceso de Alexander Escobar')).toBeOnTheScreen();
+  });
+
+  it('a quien ya tiene cuenta le enseña su usuario, nunca su contraseña', async () => {
+    const usuario = await abrirComoAdmin();
+
+    await usuario.press(screen.getByRole('button', { name: 'Gestionar el acceso de Luis Gomez' }));
+
+    expect(screen.getByLabelText('Usuario')).toHaveDisplayValue('luis');
+    expect(screen.getByLabelText('Contraseña')).toHaveDisplayValue('');
+    expect(screen.getByRole('button', { name: 'Guardar acceso' })).toBeOnTheScreen();
+  });
+
+  it('quitar el acceso pide confirmación y solo entonces lo quita', async () => {
+    users.removeBarberAccount.mockResolvedValue(undefined);
+    const usuario = await abrirComoAdmin();
+    await usuario.press(screen.getByRole('button', { name: 'Gestionar el acceso de Luis Gomez' }));
+
+    await usuario.press(screen.getByRole('button', { name: 'Quitar acceso' }));
+    expect(users.removeBarberAccount).not.toHaveBeenCalled();
+
+    await pulsarEnAlerta('Sí, quitar');
+
+    expect(users.removeBarberAccount).toHaveBeenCalledWith('luis-gomez');
+    await waitFor(() => expect(users.getUsers).toHaveBeenCalledTimes(2));
+  });
+
+  it('"Cerrar" recoge el formulario sin enviar nada', async () => {
+    const usuario = await abrirComoAdmin();
+    await usuario.press(screen.getByRole('button', { name: 'Gestionar el acceso de Luis Gomez' }));
+
+    await usuario.press(screen.getByRole('button', { name: 'Cerrar' }));
+
+    expect(screen.queryByText('Acceso de Luis Gomez')).not.toBeOnTheScreen();
+    expect(users.setBarberAccount).not.toHaveBeenCalled();
+  });
+
+  it('a un barbero no se le piden las cuentas: el servidor le diría 403', async () => {
+    await sembrarSesion(USUARIO_BARBERO);
+    await renderApp(<AdminBarberosScreen />);
+    await screen.findByText('redirige:/admin');
+
+    expect(users.getUsers).not.toHaveBeenCalled();
   });
 });

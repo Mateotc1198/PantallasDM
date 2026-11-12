@@ -7,10 +7,12 @@ import {
   type PropsWithChildren,
 } from 'react';
 
-import type { BarberSummary, Booking } from '../types/api';
+import type { BarberSummary, Booking, Service } from '../types/api';
 
 interface BookingState {
   barber: BarberSummary | null;
+  /** Lo que el cliente se va a hacer. Se elige después del barbero. */
+  service: Service | null;
   date: string | null;
   time: string | null;
   name: string;
@@ -26,6 +28,7 @@ interface BookingState {
 
 interface BookingContextValue extends BookingState {
   setBarber: (barber: BarberSummary) => void;
+  setService: (service: Service) => void;
   setDate: (date: string) => void;
   setTime: (time: string) => void;
   setName: (name: string) => void;
@@ -36,6 +39,7 @@ interface BookingContextValue extends BookingState {
 
 const INITIAL_STATE: BookingState = {
   barber: null,
+  service: null,
   date: null,
   time: null,
   name: '',
@@ -56,6 +60,11 @@ const BookingContext = createContext<BookingContextValue | null>(null);
  * que la originaron cambia, la cita que había en memoria ya no corresponde a
  * lo que el usuario está viendo.
  *
+ * El servicio queda fuera de esa cascada a propósito: el catálogo es el
+ * mismo para todos los barberos y no afecta a la disponibilidad, así que
+ * cambiar de barbero o de día no obliga a volver a elegirlo. Solo invalida la
+ * cita ya confirmada, que se hizo con el servicio anterior.
+ *
  * Se guarda el BarberSummary y no el Barber completo porque es lo que
  * devuelve la lista. Las reseñas se piden en la pantalla de perfil, que es la
  * única que las muestra.
@@ -65,6 +74,10 @@ export function BookingProvider({ children }: PropsWithChildren) {
 
   const setBarber = useCallback((barber: BarberSummary) => {
     setState((current) => ({ ...current, barber, date: null, time: null, booking: null }));
+  }, []);
+
+  const setService = useCallback((service: Service) => {
+    setState((current) => ({ ...current, service, booking: null }));
   }, []);
 
   const setDate = useCallback((date: string) => {
@@ -92,8 +105,18 @@ export function BookingProvider({ children }: PropsWithChildren) {
   }, []);
 
   const value = useMemo<BookingContextValue>(
-    () => ({ ...state, setBarber, setDate, setTime, setName, setPhone, setBooking, reset }),
-    [state, setBarber, setDate, setTime, setName, setPhone, setBooking, reset],
+    () => ({
+      ...state,
+      setBarber,
+      setService,
+      setDate,
+      setTime,
+      setName,
+      setPhone,
+      setBooking,
+      reset,
+    }),
+    [state, setBarber, setService, setDate, setTime, setName, setPhone, setBooking, reset],
   );
 
   return <BookingContext.Provider value={value}>{children}</BookingContext.Provider>;

@@ -524,3 +524,23 @@ describe('orden de las categorías', () => {
     expect(nombres).toEqual(['Todos', 'Ácidos', 'barba', 'Zeta']);
   });
 });
+
+describe('mi cita: el servicio', () => {
+  it('muestra el servicio reservado y lo que cuesta', async () => {
+    await AsyncStorage.setItem(CLAVE_CITA, CITA.id);
+    bookings.getBooking.mockResolvedValue(CITA);
+    await renderApp(<MiCitaScreen />);
+
+    expect(await screen.findByText('Fade')).toBeOnTheScreen();
+    expect(screen.getByText(/30\.000/)).toBeOnTheScreen();
+  });
+
+  it('una cita antigua sin servicio se muestra sin esas filas', async () => {
+    await AsyncStorage.setItem(CLAVE_CITA, CITA.id);
+    bookings.getBooking.mockResolvedValue({ ...CITA, service: null });
+    await renderApp(<MiCitaScreen />);
+
+    expect(await screen.findByText('Cliente Prueba')).toBeOnTheScreen();
+    expect(screen.queryByText('Servicio')).not.toBeOnTheScreen();
+  });
+});

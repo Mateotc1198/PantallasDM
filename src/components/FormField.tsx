@@ -18,6 +18,8 @@ interface FormFieldProps {
    * donde el autocorrector solo estorba.
    */
   textoLibre?: boolean;
+  /** Oculta lo que se escribe. Para contraseñas. */
+  secreto?: boolean;
 }
 
 /**
@@ -35,6 +37,7 @@ export function FormField({
   teclado = 'default',
   multilinea = false,
   textoLibre = true,
+  secreto = false,
 }: FormFieldProps) {
   const styles = useThemedStyles(makeStyles);
   const { colors } = useTheme();
@@ -48,8 +51,10 @@ export function FormField({
         editable={editable}
         keyboardType={teclado}
         multiline={multilinea}
-        autoCapitalize={textoLibre ? 'sentences' : 'none'}
-        autoCorrect={textoLibre}
+        // Una contraseña nunca se corrige ni se pone en mayúscula sola.
+        autoCapitalize={textoLibre && !secreto ? 'sentences' : 'none'}
+        autoCorrect={textoLibre && !secreto}
+        secureTextEntry={secreto}
         placeholderTextColor={colors.textMuted}
         accessibilityLabel={etiqueta}
         style={[styles.input, multilinea && styles.inputAlto]}

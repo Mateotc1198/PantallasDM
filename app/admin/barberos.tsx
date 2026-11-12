@@ -1,11 +1,14 @@
+import { Fragment, useMemo, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { Avatar } from '../../src/components/Avatar';
+import { BarberAccessForm } from '../../src/components/BarberAccessForm';
 import { CrudRow } from '../../src/components/CrudRow';
 import { CrudScreen } from '../../src/components/CrudScreen';
 import { FormField } from '../../src/components/FormField';
 import { useAuth } from '../../src/context/AuthContext';
 import { createBarber, deleteBarber, getBarbers, updateBarber } from '../../src/data/barbers';
+import { getUsers, removeBarberAccount, setBarberAccount } from '../../src/data/users';
 import { useAsync } from '../../src/hooks/useAsync';
 import { useCrudForm } from '../../src/hooks/useCrudForm';
 import { spacing, typography, type Palette } from '../../src/theme/tokens';
@@ -24,13 +27,14 @@ const TEXTOS = {
   botonCrear: 'Crear barbero',
   tituloEditar: 'Editar barbero',
   cargando: 'Cargando los barberos...',
-  vacio: 'No hay barberos activos. Agrega el primero con el botón de arriba.',
+  vacio: 'No hay barberos activos.',
+  vacioDetalle: 'Agrega el primero con el botón Nuevo.',
 };
 
 /** Una dirección https sin espacios. La misma regla que aplica el servidor. */
 const URL_HTTPS = /^https:\/\/\S+$/i;
 
-const TAMANO_FOTO = 44;
+const TAMANO_FOTO = 48;
 
 function aFormulario(barbero: BarberSummary): Formulario {
   return { name: barbero.name, specialty: barbero.specialty, avatar: barbero.avatar };
@@ -62,12 +66,13 @@ function aEntrada(form: Formulario): BarberInput {
 }
 
 /**
- * Gestión de la plantilla de barberos: agregar, editar la ficha y la foto, y
- * dar de baja.
+ * Gestión de la plantilla de barberos: agregar, editar la ficha y la foto,
+ * dar de baja, y decidir quién puede entrar al panel.
  *
- * Lo propio de un barbero es poco: tres campos y la vista previa de la foto.
  * La mecánica del formulario y el armazón de la pantalla son los mismos que
- * en servicios (useCrudForm y CrudScreen).
+ * en servicios (useCrudForm y CrudScreen). Lo propio de aquí es la vista
+ * previa de la foto y el acceso de cada barbero, que se guarda aparte de su
+ * ficha.
  *
  * Los horarios no se editan aquí: un barbero nuevo nace atendiendo todos los
  * días de 9:00 a 21:00.
@@ -75,8 +80,30 @@ function aEntrada(form: Formulario): BarberInput {
 export default function AdminBarberosScreen() {
   const styles = useThemedStyles(makeStyles);
   const { user } = useAuth();
+  const esAdmin = user?.role === 'admin';
 
   const barberos = useAsync(() => getBarbers(), [], user !== null);
+  // Las cuentas solo las puede leer un administrador: a un barbero el
+  // servidor le respondería 403, así que ni se piden.
+  const cuentas = useAsync(() => getUsers(), [], esAdmin);
+
+  /** Id del barbero cuyo acceso se está editando, o null. */
+  const [accesoAbierto, setAccesoAbierto] = useState<string | null>(null);
+
+  const usuarioPorBarbero = useMemo(() => {
+    const mapa = new Map<string, string>();
+    for (const cuenta of cuentas.data ?? []) {
+      if (cuenta.barberId !== null) {
+        mapa.set(cuenta.barberId, cuenta.username);
+      }
+    }
+    return mapa;
+  }, [cuentas.data]);
+
+  const recargarTodo = () => {
+    barberos.reload();
+    cuentas.reload();
+  };
 
   const crud = useCrudForm<BarberSummary, Formulario>({
     vacio: FORMULARIO_VACIO,
@@ -85,7 +112,7 @@ export default function AdminBarberosScreen() {
     guardar: (id, form) =>
       id === null ? createBarber(aEntrada(form)) : updateBarber(id, aEntrada(form)),
     borrar: deleteBarber,
-    alCambiar: barberos.reload,
+    alCambiar: recargarTodo,
     textosDeBorrado: (barbero) => ({
       titulo: 'Dar de baja',
       mensaje:
@@ -105,8 +132,10 @@ export default function AdminBarberosScreen() {
     <CrudScreen
       textos={TEXTOS}
       crud={crud}
-      lista={barberos}
-      vacia={lista.length === 0}
+      // Deslizar para recargar trae también las cuentas, no solo las fichas.
+      lista={{ ...barberos, reload: recargarTodo }}
+      total={lista.length}
+      iconoVacio="people-outline"
       campos={
         <>
           <FormField
@@ -145,23 +174,56 @@ export default function AdminBarberosScreen() {
           ) : null}
 
           {crud.editando === null ? (
-            <Text style={styles.nota}>Atenderá todos los días de 9:00 a 21:00.</Text>
+            <Text style={styles.nota}>
+              Atenderá todos los días de 9:00 a 21:00. El acceso al panel se le da después,
+              desde su tarjeta.
+            </Text>
           ) : null}
         </>
       }
     >
-      {lista.map((barbero) => (
-        <CrudRow
-          key={barbero.id}
-          nombre={barbero.name}
-          detalle={barbero.specialty}
-          inicio={<Avatar uri={barbero.avatar} size={TAMANO_FOTO} />}
-          onEditar={() => crud.abrirEdicion(barbero)}
-          onEliminar={() => crud.confirmarBorrado(barbero)}
-          eliminando={crud.borrandoId === barbero.id}
-          verboEliminar="Dar de baja a"
-        />
-      ))}
+      {lista.map((barbero) => {
+        const usuario = usuarioPorBarbero.get(barbero.id) ?? null;
+
+        return (
+          <Fragment key={barbero.id}>
+            <CrudRow
+              nombre={barbero.name}
+              detalle={barbero.specialty}
+              inicio={<Avatar uri={barbero.avatar} size={TAMANO_FOTO} />}
+              insignia={
+                usuario !== null
+                  ? { icono: 'key', texto: `Entra como ${usuario}`, activa: true }
+                  : { icono: 'lock-closed-outline', texto: 'Sin acceso al panel', activa: false }
+              }
+              accionExtra={{
+                icono: 'key-outline',
+                etiqueta: `Gestionar el acceso de ${barbero.name}`,
+                onPress: () =>
+                  setAccesoAbierto((abierto) => (abierto === barbero.id ? null : barbero.id)),
+              }}
+              onEditar={() => crud.abrirEdicion(barbero)}
+              onEliminar={() => crud.confirmarBorrado(barbero)}
+              eliminando={crud.borrandoId === barbero.id}
+              verboEliminar="Dar de baja a"
+            />
+
+            {accesoAbierto === barbero.id ? (
+              <BarberAccessForm
+                nombreBarbero={barbero.name}
+                usuarioActual={usuario}
+                onGuardar={(cuenta) => setBarberAccount(barbero.id, cuenta)}
+                onQuitar={() => removeBarberAccount(barbero.id)}
+                onHecho={() => {
+                  setAccesoAbierto(null);
+                  cuentas.reload();
+                }}
+                onCancelar={() => setAccesoAbierto(null)}
+              />
+            ) : null}
+          </Fragment>
+        );
+      })}
     </CrudScreen>
   );
 }

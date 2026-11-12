@@ -5,7 +5,7 @@ import { spacing, typography, type Palette } from '../theme/tokens';
 import { useTheme } from '../theme/ThemeContext';
 import { useThemedStyles } from '../theme/useThemedStyles';
 
-const DEFAULT_TOTAL = 5;
+const DEFAULT_TOTAL = 6;
 
 interface StepHeaderProps {
   step: number;
