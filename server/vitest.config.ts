@@ -10,6 +10,12 @@ export default defineConfig({
     fileParallelism: false,
     env: {
       NODE_ENV: 'test',
+      // La lista blanca de CORS se fija aquí y no se hereda del .env: cada
+      // máquina tiene el suyo (y el CI no tiene ninguno), así que un test de
+      // CORS que dependiera de él pasaría en un sitio y fallaría en otro.
+      // dotenv no pisa una variable que ya existe, de modo que este valor
+      // manda en todos los entornos.
+      CORS_ORIGINS: 'https://app.ejemplo.test',
     },
     coverage: {
       provider: 'v8',
