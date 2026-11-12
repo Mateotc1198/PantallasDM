@@ -19,6 +19,10 @@ export const createBookingSchema = z.object({
     .min(3, 'el nombre debe tener al menos 3 caracteres')
     .max(80, 'el nombre no puede superar 80 caracteres'),
   customerPhone: customerPhoneField,
+  // Opcional y anulable: una versión anterior de la app no lo manda, y
+  // romperle la reserva a quien no ha actualizado sería peor que una cita
+  // sin servicio.
+  serviceId: z.uuid('el serviceId debe ser un UUID').nullish(),
 });
 
 /**

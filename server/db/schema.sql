@@ -216,4 +216,29 @@ CREATE INDEX IF NOT EXISTS services_category_idx ON services (category);
 -- servicio escrito por dos personas distintas.
 CREATE UNIQUE INDEX IF NOT EXISTS services_nombre_unico ON services (lower(name));
 
+-- ---------------------------------------------------------------------------
+-- El servicio de cada cita
+--
+-- Va aqui, al final, y no en el CREATE TABLE de bookings, porque referencia a
+-- services y esa tabla se crea despues.
+--
+-- Se guardan TRES cosas y no solo el id, a proposito. service_name y
+-- service_price_cop son una FOTO del servicio en el momento de reservar: lo
+-- que el cliente acepto pagar. Si manana el administrador sube el precio o
+-- borra el servicio del catalogo, la cita sigue diciendo lo que se acordo.
+-- Con solo el id, editar el catalogo reescribiria el pasado.
+--
+-- service_id queda como referencia al catalogo vivo, y pasa a NULL si el
+-- servicio se elimina (ON DELETE SET NULL): borrar del catalogo no puede
+-- llevarse por delante las citas.
+--
+-- Las tres columnas admiten NULL: las citas anteriores a este cambio no
+-- tienen servicio.
+-- ---------------------------------------------------------------------------
+ALTER TABLE bookings
+  ADD COLUMN IF NOT EXISTS service_id UUID REFERENCES services(id) ON DELETE SET NULL;
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS service_name TEXT;
+ALTER TABLE bookings
+  ADD COLUMN IF NOT EXISTS service_price_cop INTEGER CHECK (service_price_cop >= 0);
+
 COMMIT;
