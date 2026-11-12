@@ -13,25 +13,27 @@ interface AdminHeaderProps {
 
 interface Pestana {
   label: string;
-  ruta: '/admin' | '/admin/servicios';
+  ruta: '/admin' | '/admin/barberos' | '/admin/servicios';
   /** Solo el administrador la ve. */
   soloAdmin: boolean;
 }
 
 /**
  * El diseño tiene cuatro pestañas: Agenda, Barberos, Servicios y Contacto.
- * Aquí hay dos, las que llevan a algo que existe. Una pestaña que no abre
- * nada es el mismo problema que los botones muertos del inicio.
+ * Aquí hay tres, las que llevan a algo que el panel gestiona. Contacto no
+ * está: es información fija de la barbería, sin nada que editar, y una
+ * pestaña que no abre nada es el mismo problema que un botón muerto.
  */
 const PESTANAS: Pestana[] = [
   { label: 'Agenda', ruta: '/admin', soloAdmin: false },
+  { label: 'Barberos', ruta: '/admin/barberos', soloAdmin: true },
   { label: 'Servicios', ruta: '/admin/servicios', soloAdmin: true },
 ];
 
 /**
  * Cabecera del panel.
  *
- * Vive aparte porque las dos pantallas del panel la comparten, y porque
+ * Vive aparte porque todas las pantallas del panel la comparten, y porque
  * saber qué pestaña está activa es cosa de la ruta y no del estado de
  * ninguna de ellas.
  */

@@ -1,5 +1,5 @@
-import { apiGet } from '../api/client';
-import type { Barber, BarberSummary } from '../types/api';
+import { apiDelete, apiGet, apiPost, apiPut } from '../api/client';
+import type { Barber, BarberInput, BarberSummary } from '../types/api';
 
 /**
  * Recurso /barbers.
@@ -8,6 +8,9 @@ import type { Barber, BarberSummary } from '../types/api';
  * datos es la frontera. Cuando esto eran arreglos en memoria, las firmas eran
  * las mismas salvo por el async, y ese detalle es justamente el que obligó a
  * que las pantallas aprendieran a esperar.
+ *
+ * Leer es público. Crear, editar y dar de baja exige una sesión de
+ * administrador: a un barbero con sesión válida el servidor le responde 403.
  */
 
 /** GET /barbers — sin reseñas: la lista no necesita los hijos de cada ficha. */
@@ -24,4 +27,29 @@ export function getBarbers(): Promise<BarberSummary[]> {
  */
 export function getBarberById(id: string): Promise<Barber> {
   return apiGet<Barber>(`/api/v1/barbers/${encodeURIComponent(id)}`);
+}
+
+/**
+ * POST /barbers — admin.
+ *
+ * El id no se manda: el servidor lo deriva del nombre. El barbero nace ya con
+ * horario, así que en cuanto esto responde se le puede reservar.
+ */
+export function createBarber(input: BarberInput): Promise<BarberSummary> {
+  return apiPost<BarberSummary>('/api/v1/barbers', input);
+}
+
+/** PUT /barbers/:id — admin. Reemplazo completo de la ficha; el id no cambia. */
+export function updateBarber(id: string, input: BarberInput): Promise<BarberSummary> {
+  return apiPut<BarberSummary>(`/api/v1/barbers/${encodeURIComponent(id)}`, input);
+}
+
+/**
+ * DELETE /barbers/:id — admin.
+ *
+ * Es una baja, no un borrado: sus citas pasadas se conservan. El servidor
+ * responde 409 si todavía tiene citas activas por atender.
+ */
+export function deleteBarber(id: string): Promise<void> {
+  return apiDelete(`/api/v1/barbers/${encodeURIComponent(id)}`);
 }
