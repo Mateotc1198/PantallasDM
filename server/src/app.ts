@@ -42,7 +42,9 @@ app.use(helmet());
 app.use(
   cors({
     origin: env.corsOrigins.length > 0 ? env.corsOrigins : false,
-    methods: ['GET', 'POST', 'DELETE'],
+    // PUT incluido: lo usan la edición de servicios y la de barberos. Sin
+    // él, un cliente web de un origen permitido no pasaría el preflight.
+    methods: ['GET', 'POST', 'PUT', 'DELETE'],
   }),
 );
 

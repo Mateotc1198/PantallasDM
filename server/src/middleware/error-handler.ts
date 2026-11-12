@@ -20,6 +20,43 @@ function zodIssuesToDetails(error: ZodError): ErrorDetail[] {
   }));
 }
 
+/**
+ * Errores del lector de cuerpos (express.json), que fallan ANTES de llegar a
+ * ningún controlador.
+ *
+ * No son instancias de AppError porque los lanza la librería, y sin este
+ * mapeo caían en el 500 genérico: se le decía "fallo nuestro" a quien mandó
+ * un JSON roto, y cada petición así dejaba un stack trace en el log.
+ *
+ * Se identifican por el campo `type`, que es el contrato documentado de
+ * body-parser, y no por el texto del mensaje.
+ */
+const ERRORES_DEL_CUERPO: Record<string, { status: number; code: string; message: string }> = {
+  'entity.parse.failed': {
+    status: 400,
+    code: ERROR_CODES.MALFORMED_JSON,
+    message: 'El cuerpo de la petición no es un JSON válido.',
+  },
+  'entity.too.large': {
+    status: 413,
+    code: ERROR_CODES.PAYLOAD_TOO_LARGE,
+    message: 'El cuerpo de la petición es demasiado grande.',
+  },
+};
+
+function errorDelCuerpo(error: unknown): (typeof ERRORES_DEL_CUERPO)[string] | undefined {
+  if (typeof error !== 'object' || error === null || !('type' in error)) {
+    return undefined;
+  }
+
+  const { type } = error as { type?: unknown };
+  // Object.hasOwn: `type` viene de fuera, y sin la comprobación un valor
+  // como "constructor" encontraría una propiedad heredada del objeto.
+  return typeof type === 'string' && Object.hasOwn(ERRORES_DEL_CUERPO, type)
+    ? ERRORES_DEL_CUERPO[type]
+    : undefined;
+}
+
 // Express identifica el manejador de errores por tener cuatro parámetros:
 // aunque `next` no se use, quitarlo lo convertiría en middleware normal.
 export const errorHandler: ErrorRequestHandler = (error, _req, res, _next) => {
@@ -46,6 +83,16 @@ export const errorHandler: ErrorRequestHandler = (error, _req, res, _next) => {
       },
     };
     res.status(error.statusCode).json(body);
+    return;
+  }
+
+  // 400 / 413 — el cuerpo no se pudo leer. Es culpa de la petición.
+  const delCuerpo = errorDelCuerpo(error);
+  if (delCuerpo !== undefined) {
+    const body: ApiErrorBody = {
+      error: { code: delCuerpo.code, message: delCuerpo.message },
+    };
+    res.status(delCuerpo.status).json(body);
     return;
   }
 
