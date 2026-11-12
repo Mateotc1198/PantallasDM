@@ -10,18 +10,23 @@
 
 BEGIN;
 
-INSERT INTO barbers (id, name, specialty, avatar_url, services_count) VALUES
+-- ON CONFLICT sin columna: salta la fila si choca con CUALQUIER restriccion
+-- unica, no solo con el id. Desde que el panel permite editar barberos, otro
+-- podria llevar ya uno de estos nombres (barbers_nombre_unico), y un seed que
+-- falla tumba el arranque.
+--
+-- Como la baja es logica, un barbero de aqui que el administrador dio de baja
+-- conserva su fila y este INSERT no lo resucita.
+INSERT INTO barbers (id, name, specialty, avatar_url) VALUES
   ('luis-gomez',
    'Luis Gomez',
    'Especialista en fades y cortes modernos.',
-   'https://i.pravatar.cc/240?img=12',
-   3),
+   'https://i.pravatar.cc/240?img=12'),
   ('alexander-escobar',
    'Alexander Escobar',
    'Experto en barba y tratamientos de hidratación capilar.',
-   'https://i.pravatar.cc/240?img=33',
-   3)
-ON CONFLICT (id) DO NOTHING;
+   'https://i.pravatar.cc/240?img=33')
+ON CONFLICT DO NOTHING;
 
 -- Las reseñas no tienen clave natural para un ON CONFLICT, asi que solo se
 -- siembran cuando la tabla esta vacia. Si alguien ya dejo reseñas reales, no

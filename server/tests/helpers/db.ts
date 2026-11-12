@@ -82,3 +82,40 @@ export async function resetServices(): Promise<void> {
        ('Arreglo de barba', 'Perfilado y aceite.', 20000, 'Barba')`,
   );
 }
+
+/** Los dos barberos del seed, que el resto de la suite da por sentados. */
+const BARBEROS_DEL_SEED = ['luis-gomez', 'alexander-escobar'];
+
+/**
+ * Deja la tabla de barberos como la dejó el seed.
+ *
+ * Los tests del panel crean, renombran y dan de baja barberos. Sin esto, el
+ * archivo siguiente se encontraría con tres barberos donde espera dos, o con
+ * luis-gomez de baja.
+ *
+ * Aquí sí se borran filas de verdad (la aplicación nunca lo hace): es la
+ * única forma de volver a un estado conocido. Las citas de los barberos de
+ * prueba se van primero porque bookings los referencia con RESTRICT.
+ */
+export async function resetBarbers(): Promise<void> {
+  await pool.query('DELETE FROM bookings WHERE barber_id <> ALL($1)', [BARBEROS_DEL_SEED]);
+  await pool.query('DELETE FROM barbers WHERE id <> ALL($1)', [BARBEROS_DEL_SEED]);
+
+  // Se quita la baja y se restauran los datos por si un test los editó.
+  await pool.query(
+    `UPDATE barbers AS b
+     SET deleted_at = NULL,
+         name       = original.name,
+         specialty  = original.specialty,
+         avatar_url = original.avatar_url
+     FROM (VALUES
+       ('luis-gomez', 'Luis Gomez',
+        'Especialista en fades y cortes modernos.',
+        'https://i.pravatar.cc/240?img=12'),
+       ('alexander-escobar', 'Alexander Escobar',
+        'Experto en barba y tratamientos de hidratación capilar.',
+        'https://i.pravatar.cc/240?img=33')
+     ) AS original(id, name, specialty, avatar_url)
+     WHERE b.id = original.id`,
+  );
+}

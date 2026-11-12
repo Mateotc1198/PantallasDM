@@ -20,6 +20,10 @@ export const ERROR_CODES = {
 
   BARBER_NOT_FOUND: 'BARBER_NOT_FOUND',
   BARBER_CLOSED_THAT_DAY: 'BARBER_CLOSED_THAT_DAY',
+  /** 409 - ya hay un barbero con ese nombre. */
+  BARBER_NAME_TAKEN: 'BARBER_NAME_TAKEN',
+  /** 409 - tiene citas activas pendientes y no se puede dar de baja. */
+  BARBER_HAS_BOOKINGS: 'BARBER_HAS_BOOKINGS',
 
   BOOKING_NOT_FOUND: 'BOOKING_NOT_FOUND',
   BOOKING_SLOT_TAKEN: 'BOOKING_SLOT_TAKEN',

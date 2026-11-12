@@ -35,14 +35,23 @@ function toAuthUser(row: UserRow): AuthUser {
   };
 }
 
-/** Único punto donde el hash sale de la base. Solo lo usa el login. */
+/**
+ * Único punto donde el hash sale de la base. Solo lo usa el login.
+ *
+ * La cuenta de un barbero dado de baja no se encuentra: para el login es
+ * como si no existiera. Se filtra aquí y no borrando la fila porque el script
+ * de cuentas iniciales la volvería a crear en el siguiente despliegue; con el
+ * filtro da igual que la fila esté o no.
+ */
 export async function findCredentialsByUsername(
   username: string,
 ): Promise<UserCredentials | null> {
   const rows = await query<CredentialsRow>(
-    `SELECT id, username, role, barber_id, password_hash
-     FROM users
-     WHERE username = $1`,
+    `SELECT u.id, u.username, u.role, u.barber_id, u.password_hash
+     FROM users u
+     LEFT JOIN barbers b ON b.id = u.barber_id
+     WHERE u.username = $1
+       AND (u.barber_id IS NULL OR b.deleted_at IS NULL)`,
     [username],
   );
 

@@ -47,6 +47,14 @@ export interface Barber {
  */
 export type BarberSummary = Omit<Barber, 'reviews'>;
 
+/**
+ * Cuerpo de POST y PUT /barbers: lo único que el administrador escribe.
+ *
+ * El id lo deriva el servidor del nombre; la calificación y los conteos se
+ * calculan. Un cliente no puede fijar ninguno de los tres.
+ */
+export type BarberInput = Pick<Barber, 'name' | 'specialty' | 'avatar'>;
+
 /** GET /barbers/:id/slots?date=YYYY-MM-DD */
 export interface Slot {
   id: string;
