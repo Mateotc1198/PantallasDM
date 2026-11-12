@@ -1,0 +1,52 @@
+# Mantiene despierta la API desplegada en Render.
+#
+# El plan gratuito de Render duerme el servicio tras unos 15 minutos sin
+# tráfico, y la primera petición después tarda unos 20 segundos en
+# despertarlo. Para quien abre la app en ese momento (el profesor, por
+# ejemplo), eso es una pantalla de carga sin explicación aparente.
+#
+# Esta tarea pide /health cada 10 minutos en horario de uso. Diez y no
+# catorce porque GitHub no garantiza la hora exacta de las tareas
+# programadas: a veces se retrasan varios minutos.
+#
+# Coste: de 7:00 a 23:00 en Colombia son unas 500 horas al mes de servicio
+# despierto, dentro de las 750 gratuitas de Render. Para apagarla: pestaña
+# Actions -> "Mantener despierta la API" -> "Disable workflow".
+name: Mantener despierta la API
+
+on:
+  schedule:
+    # Hora UTC. Colombia es UTC-5 todo el año: 12:00-03:59 UTC son
+    # 7:00-22:59 en Colombia.
+    - cron: '*/10 0-3,12-23 * * *'
+  # Para despertarla a mano justo antes de una demostración.
+  workflow_dispatch:
+
+# Solo hace una petición a una URL pública: no necesita ningún permiso
+# sobre el repositorio.
+permissions: {}
+
+# Si una ejecución se retrasa y coincide con la siguiente, sobra una.
+concurrency:
+  group: mantener-despierta
+  cancel-in-progress: true
+
+jobs:
+  despertar:
+    name: Pedir /health
+    # Solo en el fork del que despliega Render. En el repositorio de la
+    # entrega sería una segunda tarea haciendo lo mismo con la cuenta de
+    # otra persona.
+    if: github.repository == 'Mateotc1198/PantallasDM'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      API_URL: https://pantallasdm-api.onrender.com
+    steps:
+      - name: Pedir /health
+        # --max-time 90: si estaba dormida, despertarla tarda unos 20 s.
+        # --retry: un fallo de red puntual no debe marcar la tarea en rojo.
+        run: |
+          curl --fail --silent --show-error \
+               --max-time 90 --retry 3 --retry-delay 10 --retry-all-errors \
+               "$API_URL/health"
