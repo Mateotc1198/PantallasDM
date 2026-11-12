@@ -5,6 +5,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   Pressable,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -19,6 +20,7 @@ import { useTheme } from '../theme/ThemeContext';
 import { radius, spacing, typography, type Palette } from '../theme/tokens';
 import { useThemedStyles } from '../theme/useThemedStyles';
 import { AdminHeader } from './AdminHeader';
+import { EmptyState } from './EmptyState';
 import { ErrorState } from './ErrorState';
 import { LoadingState } from './LoadingState';
 import { PrimaryButton } from './PrimaryButton';
@@ -33,6 +35,8 @@ type EstadoDelFormulario = Pick<
 
 interface EstadoDeLaLista {
   loading: boolean;
+  /** Recarga pedida con el gesto de deslizar: la lista no se vacía. */
+  refreshing: boolean;
   slow: boolean;
   error: ApiError | null;
   reload: () => void;
@@ -51,14 +55,18 @@ interface Textos {
   cargando: string;
   /** Lo que se dice cuando la lista cargó bien y no trae nada. */
   vacio: string;
+  /** Qué hacer entonces: "Crea el primero con el botón Nuevo". */
+  vacioDetalle: string;
 }
 
 interface CrudScreenProps {
   textos: Textos;
   crud: EstadoDelFormulario;
   lista: EstadoDeLaLista;
-  /** La lista cargó y no tiene elementos. */
-  vacia: boolean;
+  /** Cuántos elementos tiene la lista ya cargada. */
+  total: number;
+  /** Icono del estado vacío, propio de cada recurso. */
+  iconoVacio: keyof typeof Ionicons.glyphMap;
   /** Los campos del formulario, propios de cada recurso. */
   campos: ReactNode;
   /** Las filas de la lista. */
@@ -77,7 +85,15 @@ interface CrudScreenProps {
  * pantalla nueva. Es una comodidad de interfaz, no la seguridad: quien manda
  * es el servidor, que responde 403 a un barbero aunque llegara hasta aquí.
  */
-export function CrudScreen({ textos, crud, lista, vacia, campos, children }: CrudScreenProps) {
+export function CrudScreen({
+  textos,
+  crud,
+  lista,
+  total,
+  iconoVacio,
+  campos,
+  children,
+}: CrudScreenProps) {
   const styles = useThemedStyles(makeStyles);
   const { colors } = useTheme();
   const router = useRouter();
@@ -104,14 +120,35 @@ export function CrudScreen({ textos, crud, lista, vacia, campos, children }: Cru
     router.replace('/');
   };
 
+  /** Hay una lista en pantalla de la que hablar: ni cargando ni con error. */
+  const cargado = (!lista.loading || lista.refreshing) && lista.error === null;
+
   return (
     <SafeAreaView style={styles.container}>
       <KeyboardAvoidingView style={styles.fill} behavior={KEYBOARD_BEHAVIOR}>
-        <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+        <ScrollView
+          contentContainerStyle={styles.content}
+          keyboardShouldPersistTaps="handled"
+          refreshControl={
+            <RefreshControl
+              refreshing={lista.refreshing}
+              onRefresh={lista.reload}
+              tintColor={colors.primaryText}
+              colors={[colors.primary]}
+            />
+          }
+        >
           <AdminHeader user={user} onLogout={cerrarSesion} />
 
           <View style={styles.tituloFila}>
-            <Text style={styles.titulo}>{textos.titulo}</Text>
+            <View style={styles.tituloGrupo}>
+              <Text style={styles.titulo}>{textos.titulo}</Text>
+              {cargado && total > 0 ? (
+                <View style={styles.contador}>
+                  <Text style={styles.contadorTexto}>{total}</Text>
+                </View>
+              ) : null}
+            </View>
             {!crud.abierto ? (
               <Pressable
                 onPress={crud.abrirNuevo}
@@ -149,12 +186,14 @@ export function CrudScreen({ textos, crud, lista, vacia, campos, children }: Cru
             </View>
           ) : null}
 
-          {lista.loading ? <LoadingState label={textos.cargando} slow={lista.slow} /> : null}
+          {lista.loading && !lista.refreshing ? (
+            <LoadingState label={textos.cargando} slow={lista.slow} />
+          ) : null}
 
           {lista.error !== null ? <ErrorState error={lista.error} onRetry={lista.reload} /> : null}
 
-          {!lista.loading && lista.error === null && vacia ? (
-            <Text style={styles.vacio}>{textos.vacio}</Text>
+          {cargado && total === 0 ? (
+            <EmptyState icono={iconoVacio} titulo={textos.vacio} detalle={textos.vacioDetalle} />
           ) : null}
 
           {children}
@@ -182,17 +221,36 @@ const makeStyles = (colors: Palette) => StyleSheet.create({
     justifyContent: 'space-between',
     paddingTop: spacing.sm,
   },
+  tituloGrupo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
   titulo: {
     ...typography.screenTitle,
     color: colors.textPrimary,
+  },
+  contador: {
+    minWidth: 26,
+    height: 26,
+    paddingHorizontal: spacing.sm,
+    borderRadius: radius.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.primarySoft,
+  },
+  contadorTexto: {
+    ...typography.caption,
+    fontWeight: '700',
+    color: colors.primaryText,
   },
   nuevo: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs,
-    height: 36,
+    height: 40,
     paddingHorizontal: spacing.md,
-    borderRadius: radius.sm,
+    borderRadius: radius.md,
     backgroundColor: colors.primary,
   },
   nuevoLabel: {
@@ -203,10 +261,11 @@ const makeStyles = (colors: Palette) => StyleSheet.create({
   formulario: {
     gap: spacing.sm,
     padding: spacing.md,
-    borderRadius: radius.md,
+    borderRadius: radius.lg,
     backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: colors.border,
+    // El borde de color separa "estoy editando" de las tarjetas de la lista.
+    borderColor: colors.primary,
   },
   formularioTitulo: {
     ...typography.cardTitle,
@@ -222,12 +281,6 @@ const makeStyles = (colors: Palette) => StyleSheet.create({
     textAlign: 'center',
     color: colors.textSecondary,
     paddingVertical: spacing.xs,
-  },
-  vacio: {
-    ...typography.body,
-    color: colors.textMuted,
-    textAlign: 'center',
-    paddingVertical: spacing.xl,
   },
   pressed: {
     opacity: 0.6,

@@ -3,7 +3,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import app from '../../src/app.js';
 import { ADMIN, bearer, crearUsuariosDePrueba, tokenDe } from '../helpers/auth.js';
-import { closeDatabase, insertBooking, resetBookings } from '../helpers/db.js';
+import { closeDatabase, insertBooking, resetBookings, resetServices } from '../helpers/db.js';
 import { futureOpenDate, futureSunday, pastDate } from '../helpers/dates.js';
 
 const UUID_INEXISTENTE = '11111111-2222-4333-8444-555555555555';
@@ -443,5 +443,146 @@ describe('POST /api/v1/bookings/:id/reschedule', () => {
 
     expect(respuesta.status).toBe(422);
     expect(respuesta.body.error.code).toBe('BOOKING_CHANGE_TOO_LATE');
+  });
+});
+
+describe('el servicio de la cita', () => {
+  const TELEFONO_SERVICIO = '3001112233';
+
+  beforeEach(resetServices);
+
+  /** Un servicio cualquiera del catálogo de prueba. */
+  async function unServicio(): Promise<{ id: string; name: string; priceCop: number }> {
+    const catalogo = await request(app).get('/api/v1/services');
+    return catalogo.body[0];
+  }
+
+  it('guarda el servicio elegido con su nombre y su precio', async () => {
+    const servicio = await unServicio();
+
+    const respuesta = await request(app)
+      .post('/api/v1/bookings')
+      .send({ ...validPayload(), serviceId: servicio.id });
+
+    expect(respuesta.status).toBe(201);
+    expect(respuesta.body.service).toEqual({
+      id: servicio.id,
+      name: servicio.name,
+      priceCop: servicio.priceCop,
+    });
+  });
+
+  it('el precio lo pone el catálogo: se ignora el que mande el cliente', async () => {
+    const servicio = await unServicio();
+
+    const respuesta = await request(app)
+      .post('/api/v1/bookings')
+      .send({
+        ...validPayload(),
+        serviceId: servicio.id,
+        service: { name: 'Gratis', priceCop: 0 },
+        servicePriceCop: 0,
+      });
+
+    expect(respuesta.body.service.priceCop).toBe(servicio.priceCop);
+    expect(respuesta.body.service.name).toBe(servicio.name);
+  });
+
+  it('sin servicio la cita se crea igual, con service en null', async () => {
+    const respuesta = await request(app).post('/api/v1/bookings').send(validPayload());
+
+    expect(respuesta.status).toBe(201);
+    expect(respuesta.body.service).toBeNull();
+  });
+
+  it('devuelve 404 si el servicio no existe, y no crea la cita', async () => {
+    const respuesta = await request(app)
+      .post('/api/v1/bookings')
+      .send({ ...validPayload(), serviceId: UUID_INEXISTENTE });
+    const franjas = await request(app)
+      .get('/api/v1/barbers/luis-gomez/slots')
+      .query({ date: validPayload().date });
+
+    expect(respuesta.status).toBe(404);
+    expect(respuesta.body.error.code).toBe('SERVICE_NOT_FOUND');
+    expect(
+      (franjas.body as { time: string; status: string }[]).find((f) => f.time === '10:30')?.status,
+    ).toBe('libre');
+  });
+
+  it('devuelve 400 si el serviceId no es un UUID', async () => {
+    const respuesta = await request(app)
+      .post('/api/v1/bookings')
+      .send({ ...validPayload(), serviceId: 'corte' });
+
+    expect(respuesta.status).toBe(400);
+    expect(respuesta.body.error.code).toBe('VALIDATION_ERROR');
+  });
+
+  it('subir el precio en el catálogo no cambia el de una cita ya reservada', async () => {
+    const servicio = await unServicio();
+    const cita = await request(app)
+      .post('/api/v1/bookings')
+      .send({ ...validPayload(), serviceId: servicio.id });
+
+    await request(app)
+      .put(`/api/v1/services/${servicio.id}`)
+      .set('Authorization', bearer(tokenAdmin))
+      .send({ name: 'Nombre nuevo', priceCop: 99000, category: 'Cortes' });
+    const despues = await request(app).get(`/api/v1/bookings/${cita.body.id}`);
+
+    expect(despues.body.service).toEqual({
+      id: servicio.id,
+      name: servicio.name,
+      priceCop: servicio.priceCop,
+    });
+  });
+
+  it('eliminar el servicio del catálogo no borra la cita ni lo que se acordó', async () => {
+    const servicio = await unServicio();
+    const cita = await request(app)
+      .post('/api/v1/bookings')
+      .send({ ...validPayload(), serviceId: servicio.id });
+
+    const borrado = await request(app)
+      .delete(`/api/v1/services/${servicio.id}`)
+      .set('Authorization', bearer(tokenAdmin));
+    const despues = await request(app).get(`/api/v1/bookings/${cita.body.id}`);
+
+    expect(borrado.status).toBe(204);
+    expect(despues.status).toBe(200);
+    // El id del catálogo desaparece; el nombre y el precio acordados, no.
+    expect(despues.body.service).toEqual({
+      id: null,
+      name: servicio.name,
+      priceCop: servicio.priceCop,
+    });
+  });
+
+  it('aplazar la cita conserva su servicio', async () => {
+    const servicio = await unServicio();
+    const cita = await request(app)
+      .post('/api/v1/bookings')
+      .send({ ...validPayload({ customerPhone: TELEFONO_SERVICIO }), serviceId: servicio.id });
+
+    const aplazada = await request(app)
+      .post(`/api/v1/bookings/${cita.body.id}/reschedule`)
+      .send({ customerPhone: TELEFONO_SERVICIO, date: futureOpenDate(9), time: '15:00' });
+
+    expect(aplazada.status).toBe(200);
+    expect(aplazada.body.service.name).toBe(servicio.name);
+  });
+
+  it('la agenda del panel muestra el servicio de cada cita', async () => {
+    const servicio = await unServicio();
+    await request(app)
+      .post('/api/v1/bookings')
+      .send({ ...validPayload(), serviceId: servicio.id });
+
+    const agenda = await request(app)
+      .get('/api/v1/bookings')
+      .set('Authorization', bearer(tokenAdmin));
+
+    expect(agenda.body[0].service.name).toBe(servicio.name);
   });
 });

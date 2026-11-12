@@ -3,7 +3,7 @@ import { useEffect } from 'react';
 
 import { useBooking } from '../context/BookingContext';
 
-export type BookingRequirement = 'barber' | 'date' | 'time' | 'customer' | 'booking';
+export type BookingRequirement = 'barber' | 'service' | 'date' | 'time' | 'customer' | 'booking';
 
 const FIRST_STEP = '/reserva/barbero';
 
@@ -16,12 +16,14 @@ const FIRST_STEP = '/reserva/barbero';
  */
 export function useRequireBooking(requirements: BookingRequirement[]): boolean {
   const router = useRouter();
-  const { barber, date, time, name, phone, booking } = useBooking();
+  const { barber, service, date, time, name, phone, booking } = useBooking();
 
   const satisfied = requirements.every((requirement) => {
     switch (requirement) {
       case 'barber':
         return barber !== null;
+      case 'service':
+        return service !== null;
       case 'date':
         return date !== null;
       case 'time':

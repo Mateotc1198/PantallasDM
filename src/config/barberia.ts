@@ -35,3 +35,14 @@ export function enlaceWhatsApp(mensaje: string): string {
 export function enlaceWhatsAppLibre(mensaje: string): string {
   return `https://wa.me/?text=${encodeURIComponent(mensaje)}`;
 }
+
+/** Indicativo de Colombia: los teléfonos de las citas se guardan sin él. */
+const INDICATIVO_PAIS = '57';
+
+/**
+ * Abre un chat de WhatsApp con un cliente, para avisarle de un cambio en su
+ * cita. El teléfono es el de la reserva: diez dígitos, sin indicativo.
+ */
+export function enlaceWhatsAppCliente(telefono: string, mensaje: string): string {
+  return `https://wa.me/${INDICATIVO_PAIS}${telefono}?text=${encodeURIComponent(mensaje)}`;
+}

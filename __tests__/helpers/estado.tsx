@@ -3,7 +3,7 @@ import * as SecureStore from 'expo-secure-store';
 import { useEffect, useState, type PropsWithChildren, type ReactElement } from 'react';
 
 import { useBooking } from '../../src/context/BookingContext';
-import type { AuthUser, BarberSummary, Booking } from '../../src/types/api';
+import type { AuthUser, BarberSummary, Booking, Service } from '../../src/types/api';
 import { Proveedores } from './render';
 
 export const BARBERO: BarberSummary = {
@@ -23,6 +23,15 @@ export const OTRO_BARBERO: BarberSummary = {
   specialty: 'Experto en barba',
 };
 
+export const SERVICIO: Service = {
+  id: 's1',
+  name: 'Fade',
+  description: 'Degradado a máquina.',
+  priceCop: 30000,
+  category: 'Cortes',
+  imageUrl: null,
+};
+
 export const CITA: Booking = {
   id: '11111111-2222-4333-8444-555555555555',
   barberId: 'luis-gomez',
@@ -31,6 +40,7 @@ export const CITA: Booking = {
   customerName: 'Cliente Prueba',
   customerPhone: '3000000000',
   status: 'activa',
+  service: { id: 's1', name: 'Fade', priceCop: 30000 },
   createdAt: '2026-11-10T10:00:00.000Z',
 };
 
@@ -44,6 +54,12 @@ export const USUARIO_BARBERO: AuthUser = {
 
 export interface EstadoReserva {
   barber?: BarberSummary;
+  /**
+   * Si no se indica, con barbero elegido se siembra SERVICIO: casi todos los
+   * tests necesitan uno y no hablan de él. null deja la reserva sin servicio,
+   * para probar justo ese caso.
+   */
+  service?: Service | null;
   date?: string;
   time?: string;
   name?: string;
@@ -64,6 +80,9 @@ function Sembrador({ estado, children }: PropsWithChildren<{ estado: EstadoReser
 
   useEffect(() => {
     if (estado.barber !== undefined) reserva.setBarber(estado.barber);
+    if (estado.barber !== undefined && estado.service !== null) {
+      reserva.setService(estado.service ?? SERVICIO);
+    }
     if (estado.date !== undefined) reserva.setDate(estado.date);
     if (estado.time !== undefined) reserva.setTime(estado.time);
     if (estado.name !== undefined) reserva.setName(estado.name);

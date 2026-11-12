@@ -37,6 +37,11 @@ export const ERROR_CODES = {
   /** 403 - el teléfono no corresponde al de la cita. */
   BOOKING_PHONE_MISMATCH: 'BOOKING_PHONE_MISMATCH',
 
+  /** 409 - ya hay una cuenta con ese nombre de usuario. */
+  USERNAME_TAKEN: 'USERNAME_TAKEN',
+  /** 404 - ese barbero no tiene cuenta de acceso. */
+  ACCOUNT_NOT_FOUND: 'ACCOUNT_NOT_FOUND',
+
   SERVICE_NOT_FOUND: 'SERVICE_NOT_FOUND',
   /** 409 - ya hay un servicio con ese nombre. */
   SERVICE_NAME_TAKEN: 'SERVICE_NAME_TAKEN',

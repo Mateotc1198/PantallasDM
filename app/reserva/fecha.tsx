@@ -21,7 +21,7 @@ export default function FechaScreen() {
   const styles = useThemedStyles(makeStyles);
   const router = useRouter();
   const { goBack, changeBarber } = useBookingNavigation();
-  const ready = useRequireBooking(['barber']);
+  const ready = useRequireBooking(['barber', 'service']);
   const { barber, date, setDate } = useBooking();
 
   /**
@@ -74,7 +74,7 @@ export default function FechaScreen() {
 
   return (
     <SafeAreaView edges={['bottom', 'left', 'right']} style={styles.container}>
-      <StepHeader step={3} label="Fecha" onBack={goBack} />
+      <StepHeader step={4} label="Fecha" onBack={goBack} />
       <ScrollView contentContainerStyle={styles.content}>
         <BarberChip barber={barber} onChange={changeBarber} />
         <View style={styles.heading}>

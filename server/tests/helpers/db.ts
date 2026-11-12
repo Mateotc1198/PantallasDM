@@ -74,7 +74,10 @@ export async function insertBooking(datos: {
  * lo que ve el siguiente, y un test que solo pasa según el orden no sirve.
  */
 export async function resetServices(): Promise<void> {
-  await pool.query('TRUNCATE TABLE services');
+  // DELETE y no TRUNCATE: bookings referencia a services, y Postgres no deja
+  // truncar una tabla referenciada (TRUNCATE ... CASCADE vaciaría también las
+  // citas). Con DELETE las citas conservan su foto del servicio.
+  await pool.query('DELETE FROM services');
   await pool.query(
     `INSERT INTO services (name, description, price_cop, category) VALUES
        ('Corte clasico', 'Tijera y maquina.', 25000, 'Cortes'),

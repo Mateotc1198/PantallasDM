@@ -22,7 +22,7 @@ export default function HoraScreen() {
   const styles = useThemedStyles(makeStyles);
   const router = useRouter();
   const { goBack, changeBarber } = useBookingNavigation();
-  const ready = useRequireBooking(['barber', 'date']);
+  const ready = useRequireBooking(['barber', 'service', 'date']);
   const { barber, date, time, setTime } = useBooking();
 
   const barberId = barber?.id ?? null;
@@ -56,7 +56,7 @@ export default function HoraScreen() {
 
   return (
     <SafeAreaView edges={['bottom', 'left', 'right']} style={styles.container}>
-      <StepHeader step={4} label="Hora" onBack={goBack} />
+      <StepHeader step={5} label="Hora" onBack={goBack} />
       <ScrollView contentContainerStyle={styles.content}>
         <BarberChip barber={barber} onChange={changeBarber} />
         <View style={styles.heading}>

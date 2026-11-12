@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useCallback } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Avatar } from '../../src/components/Avatar';
@@ -27,7 +27,14 @@ export default function BarberoScreen() {
   const { goBack } = useBookingNavigation();
   const { setBarber } = useBooking();
 
-  const { data: barbers, loading, error, slow, reload } = useAsync(() => getBarbers(), []);
+  const {
+    data: barbers,
+    loading,
+    refreshing,
+    error,
+    slow,
+    reload,
+  } = useAsync(() => getBarbers(), []);
 
   const selectBarber = useCallback(
     (barber: BarberSummary) => {
@@ -40,13 +47,25 @@ export default function BarberoScreen() {
   return (
     <SafeAreaView edges={['bottom', 'left', 'right']} style={styles.container}>
       <StepHeader step={1} label="Barbero" onBack={goBack} />
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView
+        contentContainerStyle={styles.content}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={reload}
+            tintColor={colors.primaryText}
+            colors={[colors.primary]}
+          />
+        }
+      >
         <View style={styles.heading}>
           <Text style={styles.title}>Elige tu barbero</Text>
           <Text style={styles.subtitle}>Con quién quieres tu próxima cita</Text>
         </View>
 
-        {loading ? <LoadingState label="Buscando barberos..." slow={slow} /> : null}
+        {loading && !refreshing ? (
+          <LoadingState label="Buscando barberos..." slow={slow} />
+        ) : null}
 
         {error !== null ? <ErrorState error={error} onRetry={reload} /> : null}
 

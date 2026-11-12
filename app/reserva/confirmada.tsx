@@ -14,6 +14,7 @@ import { radius, spacing, typography, type Palette } from '../../src/theme/token
 import { useTheme } from '../../src/theme/ThemeContext';
 import { useThemedStyles } from '../../src/theme/useThemedStyles';
 import { formatDayMonthYear, formatTime12h } from '../../src/utils/date';
+import { formatCop } from '../../src/utils/money';
 
 const CHECK_CIRCLE = 64;
 
@@ -49,6 +50,13 @@ export default function ConfirmadaScreen() {
         <View style={styles.card}>
           <Card>
             <SummaryRow label="Barbero" value={barber?.name ?? booking.barberId} />
+            {/* Del servidor, no de lo elegido: es el precio que quedó registrado. */}
+            {booking.service !== null ? (
+              <>
+                <SummaryRow label="Servicio" value={booking.service.name} />
+                <SummaryRow label="Precio" value={formatCop(booking.service.priceCop)} />
+              </>
+            ) : null}
             <SummaryRow label="Fecha" value={formatDayMonthYear(booking.date)} />
             <SummaryRow label="Hora" value={formatTime12h(booking.time)} />
             <SummaryRow label="Nombre" value={booking.customerName} />

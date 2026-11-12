@@ -41,6 +41,7 @@ const cita: Booking = {
   customerName: 'Cliente Prueba',
   customerPhone: '3000000000',
   status: 'activa',
+  service: { id: 's1', name: 'Fade', priceCop: 30000 },
   createdAt: '2026-11-10T10:00:00.000Z',
 };
 
@@ -179,7 +180,7 @@ describe('StepHeader', () => {
   it('muestra el paso actual y el total', async () => {
     await renderApp(<StepHeader step={3} label="Fecha" onBack={jest.fn()} />);
 
-    expect(screen.getByText('Paso 3 de 5')).toBeOnTheScreen();
+    expect(screen.getByText('Paso 3 de 6')).toBeOnTheScreen();
     expect(screen.getByText('Fecha')).toBeOnTheScreen();
   });
 
@@ -294,10 +295,41 @@ describe('BookingRow', () => {
   it('muestra hora en formato de 12 horas, cliente, barbero y teléfono', async () => {
     await renderApp(<BookingRow booking={cita} barberName="Luis Gomez" onCancel={jest.fn()} />);
 
-    expect(screen.getByText('9:00 am')).toBeOnTheScreen();
+    // La hora va partida: el número grande y el periodo pequeño.
+    expect(screen.getByText('9:00')).toBeOnTheScreen();
+    expect(screen.getByText('am')).toBeOnTheScreen();
     expect(screen.getByText('Cliente Prueba')).toBeOnTheScreen();
     expect(screen.getByText('Luis Gomez')).toBeOnTheScreen();
     expect(screen.getByText('3000000000')).toBeOnTheScreen();
+  });
+
+  it('dice qué servicio es y cuánto cuesta', async () => {
+    await renderApp(<BookingRow booking={cita} onCancel={jest.fn()} />);
+
+    expect(screen.getByText(/Fade · .*30\.000/)).toBeOnTheScreen();
+  });
+
+  it('una cita sin servicio lo dice en vez de dejar el hueco', async () => {
+    await renderApp(<BookingRow booking={{ ...cita, service: null }} onCancel={jest.fn()} />);
+
+    expect(screen.getByText('Sin servicio indicado')).toBeOnTheScreen();
+  });
+
+  it('sin nombre de barbero no pinta esa línea: en su agenda todas son suyas', async () => {
+    await renderApp(<BookingRow booking={cita} onCancel={jest.fn()} />);
+
+    expect(screen.queryByText('Luis Gomez')).not.toBeOnTheScreen();
+  });
+
+  it('permite escribirle al cliente por WhatsApp, con el indicativo del país', async () => {
+    const abrir = jest.spyOn(Linking, 'openURL').mockResolvedValue(undefined);
+    await renderApp(<BookingRow booking={cita} onCancel={jest.fn()} />);
+
+    await userEvent
+      .setup()
+      .press(screen.getByRole('button', { name: 'Escribir por WhatsApp a Cliente Prueba' }));
+
+    expect(abrir).toHaveBeenCalledWith(expect.stringMatching(/^https:\/\/wa\.me\/573000000000\?text=/));
   });
 
   it('cancelar devuelve la cita entera, no solo el id', async () => {
@@ -316,7 +348,7 @@ describe('BookingRow', () => {
       <BookingRow booking={cita} barberName="Luis Gomez" onCancel={jest.fn()} cancelling />,
     );
 
-    expect(screen.queryByRole('button')).not.toBeOnTheScreen();
+    expect(screen.queryByRole('button', { name: /Cancelar la cita/ })).not.toBeOnTheScreen();
   });
 });
 
@@ -398,17 +430,18 @@ describe('AdminHeader', () => {
   it('el administrador ve las tres pestañas', async () => {
     await renderApp(<AdminHeader user={admin} onLogout={jest.fn()} />);
 
+    expect(screen.getByText('Hola, admin')).toBeOnTheScreen();
     expect(screen.getByText('Panel de administración')).toBeOnTheScreen();
-    expect(screen.getByRole('radio', { name: 'Agenda' })).toBeOnTheScreen();
-    expect(screen.getByRole('radio', { name: 'Barberos' })).toBeOnTheScreen();
-    expect(screen.getByRole('radio', { name: 'Servicios' })).toBeOnTheScreen();
+    expect(screen.getByRole('tab', { name: 'Agenda' })).toBeOnTheScreen();
+    expect(screen.getByRole('tab', { name: 'Barberos' })).toBeOnTheScreen();
+    expect(screen.getByRole('tab', { name: 'Servicios' })).toBeOnTheScreen();
   });
 
   it('la pestaña de barberos lleva a su pantalla', async () => {
     usePathname.mockReturnValue('/admin');
     await renderApp(<AdminHeader user={admin} onLogout={jest.fn()} />);
 
-    await userEvent.setup().press(screen.getByRole('radio', { name: 'Barberos' }));
+    await userEvent.setup().press(screen.getByRole('tab', { name: 'Barberos' }));
 
     expect(router.replace).toHaveBeenCalledWith('/admin/barberos');
   });
@@ -417,24 +450,24 @@ describe('AdminHeader', () => {
     await renderApp(<AdminHeader user={barberoUsuario} onLogout={jest.fn()} />);
 
     expect(screen.getByText('Agenda de luis')).toBeOnTheScreen();
-    expect(screen.queryByRole('radio', { name: 'Servicios' })).not.toBeOnTheScreen();
-    expect(screen.queryByRole('radio', { name: 'Barberos' })).not.toBeOnTheScreen();
-    expect(screen.queryByRole('radio', { name: 'Agenda' })).not.toBeOnTheScreen();
+    expect(screen.queryByRole('tab', { name: 'Servicios' })).not.toBeOnTheScreen();
+    expect(screen.queryByRole('tab', { name: 'Barberos' })).not.toBeOnTheScreen();
+    expect(screen.queryByRole('tab', { name: 'Agenda' })).not.toBeOnTheScreen();
   });
 
   it('marca como activa la pestaña de la ruta actual', async () => {
     usePathname.mockReturnValue('/admin/servicios');
     await renderApp(<AdminHeader user={admin} onLogout={jest.fn()} />);
 
-    expect(screen.getByRole('radio', { name: 'Servicios' })).toBeSelected();
-    expect(screen.getByRole('radio', { name: 'Agenda' })).not.toBeSelected();
+    expect(screen.getByRole('tab', { name: 'Servicios' })).toBeSelected();
+    expect(screen.getByRole('tab', { name: 'Agenda' })).not.toBeSelected();
   });
 
   it('cambiar de pestaña reemplaza la ruta en vez de apilarla', async () => {
     usePathname.mockReturnValue('/admin');
     await renderApp(<AdminHeader user={admin} onLogout={jest.fn()} />);
 
-    await userEvent.setup().press(screen.getByRole('radio', { name: 'Servicios' }));
+    await userEvent.setup().press(screen.getByRole('tab', { name: 'Servicios' }));
 
     expect(router.replace).toHaveBeenCalledWith('/admin/servicios');
   });

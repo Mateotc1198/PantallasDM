@@ -1,7 +1,15 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import {
+  Pressable,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ErrorState } from '../../src/components/ErrorState';
@@ -15,26 +23,13 @@ import { useTheme } from '../../src/theme/ThemeContext';
 import { radius, spacing, typography, type Palette } from '../../src/theme/tokens';
 import { useThemedStyles } from '../../src/theme/useThemedStyles';
 import type { Service } from '../../src/types/api';
+import { formatCop } from '../../src/utils/money';
 
 /** Criterios de orden del selector del diseño. */
 type Orden = 'nombre' | 'precio';
 
 const SIGUIENTE_ORDEN: Record<Orden, Orden> = { nombre: 'precio', precio: 'nombre' };
 const ETIQUETA_ORDEN: Record<Orden, string> = { nombre: 'Nombre', precio: 'Precio' };
-
-/**
- * Precio en pesos, sin decimales.
- *
- * Intl está disponible en Hermes con la variante internacional, que es la
- * que trae Expo. Si algún día faltara, el separador manual sería el plan B.
- */
-function formatearPrecio(pesos: number): string {
-  return new Intl.NumberFormat('es-CO', {
-    style: 'currency',
-    currency: 'COP',
-    maximumFractionDigits: 0,
-  }).format(pesos);
-}
 
 export default function ServiciosScreen() {
   const styles = useThemedStyles(makeStyles);
@@ -87,13 +82,24 @@ export default function ServiciosScreen() {
         <TopBar onClose={() => router.replace('/')} />
       </SafeAreaView>
 
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+      <ScrollView
+        contentContainerStyle={styles.content}
+        keyboardShouldPersistTaps="handled"
+        refreshControl={
+          <RefreshControl
+            refreshing={catalogo.refreshing}
+            onRefresh={catalogo.reload}
+            tintColor={colors.primaryText}
+            colors={[colors.primary]}
+          />
+        }
+      >
         <View style={styles.encabezado}>
           <Text style={styles.titulo}>Nuestros Servicios</Text>
           <Text style={styles.subtitulo}>Servicios disponibles</Text>
         </View>
 
-        {catalogo.loading ? (
+        {catalogo.loading && !catalogo.refreshing ? (
           <LoadingState label="Cargando el catálogo..." slow={catalogo.slow} />
         ) : null}
 
@@ -183,7 +189,7 @@ function ServicioCard({ servicio }: { servicio: Service }) {
         ) : null}
         <Text style={styles.tarjetaCategoria}>{servicio.category}</Text>
       </View>
-      <Text style={styles.tarjetaPrecio}>{formatearPrecio(servicio.priceCop)}</Text>
+      <Text style={styles.tarjetaPrecio}>{formatCop(servicio.priceCop)}</Text>
     </View>
   );
 }

@@ -75,6 +75,13 @@ export async function create(input: CreateBookingInput): Promise<Booking> {
 
   const result = await bookingsRepository.create(input);
 
+  if (!result.ok && result.reason === 'service_not_found') {
+    throw new NotFoundError(
+      ERROR_CODES.SERVICE_NOT_FOUND,
+      'El servicio elegido ya no está en el catálogo.',
+    );
+  }
+
   // El choque lo detecta el índice único de la base, no una consulta previa:
   // es la única forma de que dos peticiones simultáneas no reserven lo mismo.
   if (!result.ok) {

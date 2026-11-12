@@ -28,6 +28,7 @@ import { radius, spacing, typography, type Palette } from '../../src/theme/token
 import { useTheme } from '../../src/theme/ThemeContext';
 import { useThemedStyles } from '../../src/theme/useThemedStyles';
 import { formatShortDate, formatTime12h } from '../../src/utils/date';
+import { formatCop } from '../../src/utils/money';
 
 const MIN_NAME_LENGTH = 3;
 const PHONE_LENGTH = 10;
@@ -41,8 +42,9 @@ export default function DatosScreen() {
   const { colors } = useTheme();
   const router = useRouter();
   const { goBack, changeBarber } = useBookingNavigation();
-  const ready = useRequireBooking(['barber', 'date', 'time']);
-  const { barber, date, time, name, phone, setName, setPhone, setBooking } = useBooking();
+  const ready = useRequireBooking(['barber', 'service', 'date', 'time']);
+  const { barber, service, date, time, name, phone, setName, setPhone, setBooking } =
+    useBooking();
 
   const [focused, setFocused] = useState<FocusedField>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -73,7 +75,14 @@ export default function DatosScreen() {
   );
 
   const confirm = useCallback(async () => {
-    if (!isValid || submitting || barber === null || date === null || time === null) {
+    if (
+      !isValid ||
+      submitting ||
+      barber === null ||
+      service === null ||
+      date === null ||
+      time === null
+    ) {
       return;
     }
 
@@ -88,6 +97,8 @@ export default function DatosScreen() {
         time,
         customerName: trimmedName,
         customerPhone: phone,
+        // Solo el id: el precio lo pone el servidor a partir del catálogo.
+        serviceId: service.id,
       });
 
       if (!montado.current) {
@@ -112,6 +123,7 @@ export default function DatosScreen() {
     }
   }, [
     barber,
+    service,
     date,
     isValid,
     phone,
@@ -123,13 +135,13 @@ export default function DatosScreen() {
     trimmedName,
   ]);
 
-  if (!ready || barber === null || date === null || time === null) {
+  if (!ready || barber === null || service === null || date === null || time === null) {
     return null;
   }
 
   return (
     <SafeAreaView edges={['bottom', 'left', 'right']} style={styles.container}>
-      <StepHeader step={5} label="Datos" onBack={goBack} />
+      <StepHeader step={6} label="Datos" onBack={goBack} />
       <KeyboardAvoidingView style={styles.fill} behavior={KEYBOARD_BEHAVIOR}>
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
           <BarberChip barber={barber} onChange={changeBarber} />
@@ -139,6 +151,8 @@ export default function DatosScreen() {
 
           <Card>
             <SummaryRow label="Barbero:" value={barber.name} />
+            <SummaryRow label="Servicio:" value={service.name} />
+            <SummaryRow label="Precio:" value={formatCop(service.priceCop)} />
             <SummaryRow label="Fecha:" value={formatShortDate(date)} />
             <SummaryRow label="Hora:" value={formatTime12h(time)} />
           </Card>

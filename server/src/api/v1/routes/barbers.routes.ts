@@ -3,6 +3,7 @@ import { Router } from 'express';
 import { authenticate } from '../../../middleware/authenticate.js';
 import { authorize } from '../../../middleware/authorize.js';
 import * as barbersController from '../controllers/barbers.controller.js';
+import * as usersController from '../controllers/users.controller.js';
 
 /**
  * Barberos.
@@ -21,5 +22,15 @@ router.get('/:id/availability', barbersController.getMonthAvailability);
 router.post('/', authenticate, authorize('admin'), barbersController.create);
 router.put('/:id', authenticate, authorize('admin'), barbersController.update);
 router.delete('/:id', authenticate, authorize('admin'), barbersController.remove);
+
+// La cuenta con la que un barbero entra al panel. Cuelga de su ficha porque
+// es suya y única: no hay "cuentas" sueltas que crear.
+router.put('/:id/account', authenticate, authorize('admin'), usersController.setBarberAccount);
+router.delete(
+  '/:id/account',
+  authenticate,
+  authorize('admin'),
+  usersController.removeBarberAccount,
+);
 
 export default router;

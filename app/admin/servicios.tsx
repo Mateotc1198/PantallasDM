@@ -6,6 +6,7 @@ import { createService, deleteService, getServices, updateService } from '../../
 import { useAsync } from '../../src/hooks/useAsync';
 import { useCrudForm } from '../../src/hooks/useCrudForm';
 import type { Service, ServiceInput } from '../../src/types/api';
+import { formatCop } from '../../src/utils/money';
 
 /** Lo que hay en el formulario: todo texto, porque eso es lo que se teclea. */
 interface Formulario {
@@ -31,7 +32,8 @@ const TEXTOS = {
   botonCrear: 'Crear servicio',
   tituloEditar: 'Editar servicio',
   cargando: 'Cargando el catálogo...',
-  vacio: 'El catálogo está vacío. Crea el primer servicio con el botón de arriba.',
+  vacio: 'El catálogo está vacío.',
+  vacioDetalle: 'Crea el primer servicio con el botón Nuevo.',
 };
 
 function aFormulario(servicio: Service): Formulario {
@@ -119,7 +121,8 @@ export default function AdminServiciosScreen() {
       textos={TEXTOS}
       crud={crud}
       lista={catalogo}
-      vacia={servicios.length === 0}
+      total={servicios.length}
+      iconoVacio="cut-outline"
       campos={
         <>
           <FormField
@@ -165,7 +168,8 @@ export default function AdminServiciosScreen() {
         <CrudRow
           key={servicio.id}
           nombre={servicio.name}
-          detalle={`${servicio.category} · $${servicio.priceCop.toLocaleString('es-CO')}`}
+          detalle={servicio.category}
+          valor={formatCop(servicio.priceCop)}
           onEditar={() => crud.abrirEdicion(servicio)}
           onEliminar={() => crud.confirmarBorrado(servicio)}
           eliminando={crud.borrandoId === servicio.id}
