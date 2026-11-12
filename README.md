@@ -50,7 +50,7 @@ agenda, la plantilla de barberos y el catálogo de servicios.
 - Reserva en seis pasos: barbero, perfil y reseñas, servicio, día, hora y sus datos.
 - Solo ve los días y las horas que de verdad están libres.
 - Consulta su cita, la **aplaza** o la **cancela**, hasta dos horas antes.
-- Ve el catálogo de servicios con precios, y los datos de contacto.
+- Ve el catálogo de servicios con precios e imágenes, y los datos de contacto.
 - Elige tema oscuro o claro; la app recuerda la elección.
 
 **El panel, con inicio de sesión:**
@@ -58,7 +58,7 @@ agenda, la plantilla de barberos y el catálogo de servicios.
 | Rol | Puede |
 | --- | --- |
 | `barbero` | Ver, cancelar y marcar como atendidas o "no vino" **sus propias** citas |
-| `admin` | Ver, cancelar y marcar **todas** las citas; crear, editar y dar de baja barberos, con su foto desde la galería, y darles acceso al panel; crear, editar y eliminar servicios |
+| `admin` | Ver, cancelar y marcar **todas** las citas; crear, editar y dar de baja barberos, con su foto desde la galería, y darles acceso al panel; crear, editar y eliminar servicios, también con su imagen desde la galería |
 
 **Reglas de negocio que el servidor hace cumplir:**
 
@@ -133,7 +133,7 @@ npm run dev
 
 ## La API
 
-Veinticinco endpoints bajo `/api/v1`. La tabla completa, con quién puede usar cada
+Veintiséis endpoints bajo `/api/v1`. La tabla completa, con quién puede usar cada
 uno y sus códigos HTTP, está en [`server/README.md`](server/README.md#endpoints).
 
 | Recurso | Qué ofrece | Acceso |
@@ -144,7 +144,7 @@ uno y sus códigos HTTP, está en [`server/README.md`](server/README.md#endpoint
 | `/users` | Cuentas de acceso existentes | **admin** |
 | `/bookings` | Reservar, consultar, aplazar y cancelar la propia cita | público |
 | `/bookings` | Agenda del panel, cancelación y marcar atendida o "no vino" | **admin · barbero** |
-| `/services` | Catálogo | público |
+| `/services` | Catálogo, con la imagen de cada servicio | público |
 | `/services` | Crear, editar y eliminar | **admin** |
 
 ## Pruebas y calidad
@@ -156,9 +156,9 @@ cd server && npm test       # API (necesita la base de datos de pruebas)
 
 | | Pruebas | Qué cubren |
 | --- | --- | --- |
-| App | 439 | Pantallas, componentes, navegación, sesión y capa de datos |
-| API | 303 | Los 25 endpoints contra PostgreSQL real, roles y reglas de negocio |
-| Postman | 52 peticiones | El flujo completo, ejecutable de corrido |
+| App | 451 | Pantallas, componentes, navegación, sesión y capa de datos |
+| API | 325 | Los 26 endpoints contra PostgreSQL real, roles y reglas de negocio |
+| Postman | 55 peticiones | El flujo completo, ejecutable de corrido |
 
 En cada cambio, GitHub Actions ejecuta el lint, la comprobación de tipos y las
 pruebas de la app y de la API, compila el bundle de Android y envía la cobertura

@@ -437,21 +437,24 @@ describe('gestión del catálogo', () => {
     expect(services.createService).not.toHaveBeenCalled();
   });
 
-  it('rechaza una imagen que no es una URL', async () => {
+  it.each([
+    ['que no es una URL', 'foto.png'],
+    ['por http sin cifrar', 'http://ejemplo.com/foto.png'],
+  ])('rechaza una URL de imagen %s', async (_caso, url) => {
     const usuario = await abrirComoAdmin();
     await usuario.press(screen.getByRole('button', { name: 'Agregar un servicio' }));
 
     await usuario.type(screen.getByLabelText('Nombre'), 'Afeitado');
     await usuario.type(screen.getByLabelText('Categoría'), 'Barba');
     await usuario.type(screen.getByLabelText('Precio en pesos'), '32000');
-    await usuario.type(screen.getByLabelText('Imagen (opcional)'), 'foto.png');
+    await usuario.type(screen.getByLabelText('O pega la URL de una imagen'), url);
     await usuario.press(screen.getByRole('button', { name: 'Crear servicio' }));
 
-    expect(screen.getByText(/debe ser una URL/)).toBeOnTheScreen();
+    expect(screen.getByText('La URL de la imagen debe empezar por https://')).toBeOnTheScreen();
     expect(services.createService).not.toHaveBeenCalled();
   });
 
-  it('crea un servicio con el precio como número y la imagen vacía como null', async () => {
+  it('crea un servicio con el precio como número y, sin imagen, sin mandar ninguna', async () => {
     services.createService.mockResolvedValue({ ...FADE, id: 's2', name: 'Afeitado' });
     const usuario = await abrirComoAdmin();
     await usuario.press(screen.getByRole('button', { name: 'Agregar un servicio' }));
@@ -468,7 +471,6 @@ describe('gestión del catálogo', () => {
         description: '',
         priceCop: 32000,
         category: 'Barba',
-        imageUrl: null,
       }),
     );
   });
@@ -1209,5 +1211,154 @@ describe('marcar cómo terminó una cita', () => {
 
     expect(await screen.findByRole('button', { name: /Cancelar la cita/ })).toBeOnTheScreen();
     expect(screen.queryByRole('button', { name: /Marcar/ })).not.toBeOnTheScreen();
+  });
+});
+
+describe('imagen del servicio desde la galería', () => {
+  const ELEGIDA = { uri: 'file:///afeitado.jpg', base64: 'BASE64-DEL-SERVICIO' };
+  const CON_IMAGEN: Service = { ...FADE, imageUrl: 'https://ejemplo.com/fade.jpg' };
+
+  beforeEach(() => {
+    usePathname.mockReturnValue('/admin/servicios');
+  });
+
+  async function abrir(catalogo: Service[] = [FADE]) {
+    services.getServices.mockResolvedValue(catalogo);
+    await sembrarSesion(ADMIN);
+    await renderApp(<AdminServiciosScreen />);
+    await screen.findByText('Fade');
+    return userEvent.setup();
+  }
+
+  async function rellenarNuevo(usuario: ReturnType<typeof userEvent.setup>) {
+    await usuario.press(screen.getByRole('button', { name: 'Agregar un servicio' }));
+    await usuario.type(screen.getByLabelText('Nombre'), 'Afeitado');
+    await usuario.type(screen.getByLabelText('Categoría'), 'Barba');
+    await usuario.type(screen.getByLabelText('Precio en pesos'), '32000');
+  }
+
+  it('la lista enseña la miniatura de los servicios que tienen imagen', async () => {
+    await abrir([CON_IMAGEN]);
+
+    expect(screen.getByLabelText('Imagen de Fade')).toBeOnTheScreen();
+  });
+
+  it('sin imagen no pinta miniatura', async () => {
+    await abrir();
+
+    expect(screen.queryByLabelText('Imagen de Fade')).not.toBeOnTheScreen();
+  });
+
+  it('crea el servicio con la imagen de la galería', async () => {
+    photoPicker.elegirFotoDeGaleria.mockResolvedValue(ELEGIDA);
+    services.createService.mockResolvedValue({ ...FADE, id: 's2' });
+    const usuario = await abrir();
+    await rellenarNuevo(usuario);
+
+    await usuario.press(screen.getByRole('button', { name: 'Elegir foto de la galería' }));
+    await screen.findByText(/Foto nueva lista/);
+    await usuario.press(screen.getByRole('button', { name: 'Crear servicio' }));
+
+    await waitFor(() =>
+      expect(services.createService).toHaveBeenCalledWith({
+        name: 'Afeitado',
+        description: '',
+        priceCop: 32000,
+        category: 'Barba',
+        photo: 'BASE64-DEL-SERVICIO',
+      }),
+    );
+  });
+
+  it('al crear, "Quitar imagen" descarta la elegida y no manda nada', async () => {
+    photoPicker.elegirFotoDeGaleria.mockResolvedValue(ELEGIDA);
+    services.createService.mockResolvedValue({ ...FADE, id: 's2' });
+    const usuario = await abrir();
+    await rellenarNuevo(usuario);
+    await usuario.press(screen.getByRole('button', { name: 'Elegir foto de la galería' }));
+    await screen.findByText(/Foto nueva lista/);
+
+    await usuario.press(screen.getByRole('button', { name: 'Quitar la imagen' }));
+    expect(screen.getByLabelText('Sin foto todavía')).toBeOnTheScreen();
+    await usuario.press(screen.getByRole('button', { name: 'Crear servicio' }));
+
+    await waitFor(() => expect(services.createService).toHaveBeenCalledTimes(1));
+    expect(services.createService.mock.calls[0][0]).not.toHaveProperty('photo');
+    expect(services.createService.mock.calls[0][0]).not.toHaveProperty('imageUrl');
+  });
+
+  it('editar sin tocar la imagen no la reenvía: el servidor conserva la suya', async () => {
+    services.updateService.mockResolvedValue(CON_IMAGEN);
+    const usuario = await abrir([CON_IMAGEN]);
+
+    await usuario.press(screen.getByRole('button', { name: 'Editar Fade' }));
+    expect(screen.getByText(/se conserva la foto actual/)).toBeOnTheScreen();
+    await usuario.press(screen.getByRole('button', { name: 'Guardar cambios' }));
+
+    await waitFor(() => expect(services.updateService).toHaveBeenCalledTimes(1));
+    expect(services.updateService.mock.calls[0][1]).not.toHaveProperty('imageUrl');
+    expect(services.updateService.mock.calls[0][1]).not.toHaveProperty('photo');
+  });
+
+  it('editar y quitar la imagen manda imageUrl en null', async () => {
+    services.updateService.mockResolvedValue(FADE);
+    const usuario = await abrir([CON_IMAGEN]);
+    await usuario.press(screen.getByRole('button', { name: 'Editar Fade' }));
+
+    await usuario.press(screen.getByRole('button', { name: 'Quitar la imagen' }));
+    await usuario.press(screen.getByRole('button', { name: 'Guardar cambios' }));
+
+    await waitFor(() =>
+      expect(services.updateService).toHaveBeenCalledWith(
+        's1',
+        expect.objectContaining({ imageUrl: null }),
+      ),
+    );
+  });
+
+  it('sin imagen actual no ofrece quitarla', async () => {
+    const usuario = await abrir();
+
+    await usuario.press(screen.getByRole('button', { name: 'Editar Fade' }));
+
+    expect(screen.queryByRole('button', { name: 'Quitar la imagen' })).not.toBeOnTheScreen();
+  });
+
+  it('escribir una URL después de quitar la imagen la usa como nueva', async () => {
+    services.updateService.mockResolvedValue(FADE);
+    const usuario = await abrir([CON_IMAGEN]);
+    await usuario.press(screen.getByRole('button', { name: 'Editar Fade' }));
+    await usuario.press(screen.getByRole('button', { name: 'Quitar la imagen' }));
+
+    await usuario.type(
+      screen.getByLabelText('O pega la URL de una imagen'),
+      'https://ejemplo.com/nueva.jpg',
+    );
+    await usuario.press(screen.getByRole('button', { name: 'Guardar cambios' }));
+
+    await waitFor(() =>
+      expect(services.updateService).toHaveBeenCalledWith(
+        's1',
+        expect.objectContaining({ imageUrl: 'https://ejemplo.com/nueva.jpg' }),
+      ),
+    );
+  });
+
+  it('al editar, una imagen nueva de la galería viaja como photo', async () => {
+    photoPicker.elegirFotoDeGaleria.mockResolvedValue(ELEGIDA);
+    services.updateService.mockResolvedValue(CON_IMAGEN);
+    const usuario = await abrir([CON_IMAGEN]);
+    await usuario.press(screen.getByRole('button', { name: 'Editar Fade' }));
+
+    await usuario.press(screen.getByRole('button', { name: 'Elegir foto de la galería' }));
+    await screen.findByText(/Foto nueva lista/);
+    await usuario.press(screen.getByRole('button', { name: 'Guardar cambios' }));
+
+    await waitFor(() =>
+      expect(services.updateService).toHaveBeenCalledWith(
+        's1',
+        expect.objectContaining({ photo: 'BASE64-DEL-SERVICIO' }),
+      ),
+    );
   });
 });

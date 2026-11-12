@@ -523,3 +523,14 @@ describe('el servicio a lo largo del flujo', () => {
     expect(screen.queryByText('Servicio')).not.toBeOnTheScreen();
   });
 });
+
+describe('paso 3: la imagen de cada servicio', () => {
+  it('enseña la miniatura del servicio que la tiene', async () => {
+    services.getServices.mockResolvedValue([
+      { ...SERVICIO, imageUrl: 'https://ejemplo.com/fade.jpg' },
+    ]);
+    await renderConReserva(<ServicioScreen />, { barber: BARBERO, service: null });
+
+    expect(await screen.findByLabelText('Imagen de Fade')).toBeOnTheScreen();
+  });
+});
