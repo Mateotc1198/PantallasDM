@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useCallback } from 'react';
-import { ImageBackground, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Image, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { PrimaryButton } from '../src/components/PrimaryButton';
@@ -47,7 +47,20 @@ export default function HomeScreen() {
   }, [router]);
 
   return (
-    <ImageBackground source={{ uri: HERO_IMAGE }} style={styles.hero}>
+    <View style={styles.hero}>
+      {/*
+        La fotografía va detrás del contenido como una Image posicionada, no
+        con ImageBackground: React Native lo marcó obsoleto y avisa de que
+        desaparecerá. Es decorativa, así que se oculta a los lectores de
+        pantalla en vez de anunciarse como una imagen sin descripcion.
+      */}
+      <Image
+        source={{ uri: HERO_IMAGE }}
+        style={StyleSheet.absoluteFill}
+        resizeMode="cover"
+        accessible={false}
+        accessibilityIgnoresInvertColors
+      />
       <View style={styles.overlay}>
         <SafeAreaView style={styles.safeArea}>
           <View style={styles.content}>
@@ -131,7 +144,7 @@ export default function HomeScreen() {
           </Pressable>
         </SafeAreaView>
       </View>
-    </ImageBackground>
+    </View>
   );
 }
 
