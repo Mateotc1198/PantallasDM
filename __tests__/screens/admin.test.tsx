@@ -11,6 +11,7 @@ import * as barbersData from '../../src/data/barbers';
 import * as bookingsData from '../../src/data/bookings';
 import * as servicesData from '../../src/data/services';
 import * as usersData from '../../src/data/users';
+import * as photoPickerModule from '../../src/media/photoPicker';
 import type { Service } from '../../src/types/api';
 import { toISODate } from '../../src/utils/date';
 import { reiniciarDobles } from '../helpers/dobles';
@@ -35,12 +36,16 @@ jest.mock('../../src/data/barbers');
 jest.mock('../../src/data/bookings');
 jest.mock('../../src/data/services');
 jest.mock('../../src/data/users');
+// Con fábrica y no automock: el módulo real importa código nativo de la
+// galería, que no existe en los tests.
+jest.mock('../../src/media/photoPicker', () => ({ elegirFotoDeGaleria: jest.fn() }));
 
 const auth = jest.mocked(authData);
 const barbers = jest.mocked(barbersData);
 const bookings = jest.mocked(bookingsData);
 const services = jest.mocked(servicesData);
 const users = jest.mocked(usersData);
+const photoPicker = jest.mocked(photoPickerModule);
 
 const HOY = toISODate(new Date());
 
@@ -66,7 +71,7 @@ async function pulsarEnAlerta(texto: string) {
 
 beforeEach(() => {
   reiniciarRouter();
-  reiniciarDobles(auth, barbers, bookings, services, users);
+  reiniciarDobles(auth, barbers, bookings, services, users, photoPicker);
   jest.restoreAllMocks();
   alerta = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
 
@@ -557,7 +562,7 @@ describe('gestión de barberos', () => {
     await usuario.press(screen.getByRole('button', { name: 'Agregar un barbero' }));
     await usuario.type(screen.getByLabelText('Nombre'), '  Camila Ortiz  ');
     await usuario.type(screen.getByLabelText('Especialidad'), 'Colorimetría');
-    await usuario.type(screen.getByLabelText('Foto'), FOTO);
+    await usuario.type(screen.getByLabelText('O pega la URL de una foto'), FOTO);
   }
 
   it('sin sesión manda al login', async () => {
@@ -627,31 +632,42 @@ describe('gestión de barberos', () => {
     expect(barbers.createBarber).not.toHaveBeenCalled();
   });
 
-  it('rechaza una foto por http: en la app publicada no se vería', async () => {
+  it('rechaza una URL por http: en la app publicada no se vería', async () => {
     const usuario = await abrirComoAdmin();
     await usuario.press(screen.getByRole('button', { name: 'Agregar un barbero' }));
 
     await usuario.type(screen.getByLabelText('Nombre'), 'Camila Ortiz');
     await usuario.type(screen.getByLabelText('Especialidad'), 'Colorimetría');
-    await usuario.type(screen.getByLabelText('Foto'), 'http://ejemplo.com/camila.png');
+    await usuario.type(screen.getByLabelText('O pega la URL de una foto'), 'http://ejemplo.com/camila.png');
     await usuario.press(screen.getByRole('button', { name: 'Crear barbero' }));
 
-    // El texto exacto: la ayuda del campo también menciona https.
-    expect(
-      screen.getByText('La foto debe ser una URL que empiece por https://'),
-    ).toBeOnTheScreen();
+    expect(screen.getByText('La URL de la foto debe empezar por https://')).toBeOnTheScreen();
     expect(barbers.createBarber).not.toHaveBeenCalled();
   });
 
-  it('la vista previa de la foto aparece solo con una dirección bien formada', async () => {
+  it('un barbero nuevo necesita foto, de la galería o por URL', async () => {
     const usuario = await abrirComoAdmin();
     await usuario.press(screen.getByRole('button', { name: 'Agregar un barbero' }));
 
-    await usuario.type(screen.getByLabelText('Foto'), 'https');
-    expect(screen.queryByText('Así se verá la foto.')).not.toBeOnTheScreen();
+    await usuario.type(screen.getByLabelText('Nombre'), 'Camila Ortiz');
+    await usuario.type(screen.getByLabelText('Especialidad'), 'Colorimetría');
+    await usuario.press(screen.getByRole('button', { name: 'Crear barbero' }));
 
-    await usuario.type(screen.getByLabelText('Foto'), '://ejemplo.com/camila.png');
-    expect(screen.getByText('Así se verá la foto.')).toBeOnTheScreen();
+    expect(screen.getByText('Elige una foto de la galería o pega su URL.')).toBeOnTheScreen();
+    expect(barbers.createBarber).not.toHaveBeenCalled();
+  });
+
+  it('la vista previa sale con una dirección bien formada, no a medio teclear', async () => {
+    const usuario = await abrirComoAdmin();
+    await usuario.press(screen.getByRole('button', { name: 'Agregar un barbero' }));
+
+    expect(screen.getByLabelText('Sin foto todavía')).toBeOnTheScreen();
+
+    await usuario.type(screen.getByLabelText('O pega la URL de una foto'), 'https');
+    expect(screen.getByLabelText('Sin foto todavía')).toBeOnTheScreen();
+
+    await usuario.type(screen.getByLabelText('O pega la URL de una foto'), '://ejemplo.com/camila.png');
+    expect(screen.queryByLabelText('Sin foto todavía')).not.toBeOnTheScreen();
   });
 
   it('crea el barbero con los textos recortados y sin mandar un id', async () => {
@@ -704,22 +720,24 @@ describe('gestión de barberos', () => {
     expect(await screen.findByText(/No pudimos conectar/)).toBeOnTheScreen();
   });
 
-  it('editar abre el formulario con la ficha actual y guarda por PUT', async () => {
+  it('editar abre la ficha actual y, sin tocar la foto, no la reenvía', async () => {
     barbers.updateBarber.mockResolvedValue(BARBERO);
     const usuario = await abrirComoAdmin();
 
     await usuario.press(screen.getByRole('button', { name: 'Editar Luis Gomez' }));
     expect(screen.getByText('Editar barbero')).toBeOnTheScreen();
     expect(screen.getByLabelText('Nombre')).toHaveDisplayValue('Luis Gomez');
-    expect(screen.getByLabelText('Foto')).toHaveDisplayValue('https://ejemplo.com/luis.png');
+    // El campo de URL es para una nueva: empieza vacío.
+    expect(screen.getByLabelText('O pega la URL de una foto')).toHaveDisplayValue('');
+    expect(screen.getByText(/se conserva la foto actual/)).toBeOnTheScreen();
 
     await usuario.press(screen.getByRole('button', { name: 'Guardar cambios' }));
 
+    // Sin avatar ni photo: el servidor conserva la que tiene.
     await waitFor(() =>
       expect(barbers.updateBarber).toHaveBeenCalledWith('luis-gomez', {
         name: 'Luis Gomez',
         specialty: 'Especialista en fades',
-        avatar: 'https://ejemplo.com/luis.png',
       }),
     );
     expect(barbers.createBarber).not.toHaveBeenCalled();
@@ -738,8 +756,7 @@ describe('gestión de barberos', () => {
     const usuario = await abrirComoAdmin();
     await usuario.press(screen.getByRole('button', { name: 'Editar Luis Gomez' }));
 
-    await usuario.clear(screen.getByLabelText('Foto'));
-    await usuario.type(screen.getByLabelText('Foto'), FOTO);
+    await usuario.type(screen.getByLabelText('O pega la URL de una foto'), FOTO);
     await usuario.press(screen.getByRole('button', { name: 'Guardar cambios' }));
 
     await waitFor(() =>
@@ -972,5 +989,126 @@ describe('acceso de los barberos al panel', () => {
     await screen.findByText('redirige:/admin');
 
     expect(users.getUsers).not.toHaveBeenCalled();
+  });
+});
+
+describe('foto del barbero desde la galería', () => {
+  const ELEGIDA = { uri: 'file:///camila.jpg', base64: 'BASE64-DE-LA-FOTO' };
+
+  beforeEach(() => {
+    usePathname.mockReturnValue('/admin/barberos');
+  });
+
+  async function abrirNuevo() {
+    await sembrarSesion(ADMIN);
+    await renderApp(<AdminBarberosScreen />);
+    await screen.findByText('Luis Gomez');
+    const usuario = userEvent.setup();
+    await usuario.press(screen.getByRole('button', { name: 'Agregar un barbero' }));
+    await usuario.type(screen.getByLabelText('Nombre'), 'Camila Ortiz');
+    await usuario.type(screen.getByLabelText('Especialidad'), 'Colorimetría');
+    return usuario;
+  }
+
+  it('crea el barbero con la foto de la galería y sin URL', async () => {
+    photoPicker.elegirFotoDeGaleria.mockResolvedValue(ELEGIDA);
+    barbers.createBarber.mockResolvedValue({ ...BARBERO, id: 'camila-ortiz' });
+    const usuario = await abrirNuevo();
+
+    await usuario.press(screen.getByRole('button', { name: 'Elegir foto de la galería' }));
+    expect(await screen.findByText('Foto nueva lista. Se sube al guardar.')).toBeOnTheScreen();
+    await usuario.press(screen.getByRole('button', { name: 'Crear barbero' }));
+
+    await waitFor(() =>
+      expect(barbers.createBarber).toHaveBeenCalledWith({
+        name: 'Camila Ortiz',
+        specialty: 'Colorimetría',
+        photo: 'BASE64-DE-LA-FOTO',
+      }),
+    );
+  });
+
+  it('cerrar la galería sin elegir deja el formulario como estaba', async () => {
+    photoPicker.elegirFotoDeGaleria.mockResolvedValue(null);
+    const usuario = await abrirNuevo();
+
+    await usuario.press(screen.getByRole('button', { name: 'Elegir foto de la galería' }));
+
+    await waitFor(() => expect(photoPicker.elegirFotoDeGaleria).toHaveBeenCalledTimes(1));
+    expect(screen.getByLabelText('Sin foto todavía')).toBeOnTheScreen();
+    expect(screen.queryByText(/Foto nueva lista/)).not.toBeOnTheScreen();
+  });
+
+  it('si la foto no se puede usar lo explica, y ofrece la URL', async () => {
+    photoPicker.elegirFotoDeGaleria.mockRejectedValue(new Error('formato raro'));
+    const usuario = await abrirNuevo();
+
+    await usuario.press(screen.getByRole('button', { name: 'Elegir foto de la galería' }));
+
+    await waitFor(() =>
+      expect(alerta).toHaveBeenCalledWith(
+        'No se pudo usar esa foto',
+        expect.stringMatching(/pega la URL/),
+      ),
+    );
+  });
+
+  it('elegir de la galería después de escribir una URL la reemplaza', async () => {
+    photoPicker.elegirFotoDeGaleria.mockResolvedValue(ELEGIDA);
+    barbers.createBarber.mockResolvedValue({ ...BARBERO, id: 'camila-ortiz' });
+    const usuario = await abrirNuevo();
+    await usuario.type(screen.getByLabelText('O pega la URL de una foto'), 'https://ejemplo.com/a.png');
+
+    await usuario.press(screen.getByRole('button', { name: 'Elegir foto de la galería' }));
+    await screen.findByText(/Foto nueva lista/);
+
+    expect(screen.getByLabelText('O pega la URL de una foto')).toHaveDisplayValue('');
+    await usuario.press(screen.getByRole('button', { name: 'Crear barbero' }));
+    await waitFor(() =>
+      expect(barbers.createBarber).toHaveBeenCalledWith(
+        expect.not.objectContaining({ avatar: expect.anything() }),
+      ),
+    );
+  });
+
+  it('escribir una URL después de elegir de la galería descarta la foto elegida', async () => {
+    photoPicker.elegirFotoDeGaleria.mockResolvedValue(ELEGIDA);
+    barbers.createBarber.mockResolvedValue({ ...BARBERO, id: 'camila-ortiz' });
+    const usuario = await abrirNuevo();
+    await usuario.press(screen.getByRole('button', { name: 'Elegir foto de la galería' }));
+    await screen.findByText(/Foto nueva lista/);
+
+    await usuario.type(screen.getByLabelText('O pega la URL de una foto'), 'https://ejemplo.com/a.png');
+    await usuario.press(screen.getByRole('button', { name: 'Crear barbero' }));
+
+    await waitFor(() =>
+      expect(barbers.createBarber).toHaveBeenCalledWith({
+        name: 'Camila Ortiz',
+        specialty: 'Colorimetría',
+        avatar: 'https://ejemplo.com/a.png',
+      }),
+    );
+  });
+
+  it('al editar, una foto nueva de la galería viaja como photo', async () => {
+    photoPicker.elegirFotoDeGaleria.mockResolvedValue(ELEGIDA);
+    barbers.updateBarber.mockResolvedValue(BARBERO);
+    await sembrarSesion(ADMIN);
+    await renderApp(<AdminBarberosScreen />);
+    await screen.findByText('Luis Gomez');
+    const usuario = userEvent.setup();
+    await usuario.press(screen.getByRole('button', { name: 'Editar Luis Gomez' }));
+
+    await usuario.press(screen.getByRole('button', { name: 'Elegir foto de la galería' }));
+    await screen.findByText(/Foto nueva lista/);
+    await usuario.press(screen.getByRole('button', { name: 'Guardar cambios' }));
+
+    await waitFor(() =>
+      expect(barbers.updateBarber).toHaveBeenCalledWith('luis-gomez', {
+        name: 'Luis Gomez',
+        specialty: 'Especialista en fades',
+        photo: 'BASE64-DE-LA-FOTO',
+      }),
+    );
   });
 });
