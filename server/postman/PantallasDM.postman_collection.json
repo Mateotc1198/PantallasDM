@@ -959,7 +959,140 @@
           "response": []
         },
         {
-          "name": "20. Eliminar servicio (admin)",
+          "name": "20. Subir imagen del servicio (admin)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenAdmin}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Afeitado clasico\",\n  \"description\": \"Ahora con masaje facial.\",\n  \"priceCop\": 36000,\n  \"category\": \"Barba\",\n  \"photo\": \"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/services/{{serviceId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "services",
+                "{{serviceId}}"
+              ]
+            },
+            "description": "La app manda la imagen de la galería en base64 (JPEG o PNG, hasta 300 KB). Aquí va un PNG de 1x1 píxel. Editar sin \"photo\" ni \"imageUrl\" conserva la imagen; \"imageUrl\": null la quita."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "",
+                  "pm.test('la imagen apunta a la guardada en la API', () => {",
+                  "    pm.expect(pm.response.json().imageUrl).to.match(/\\/api\\/v1\\/services\\/.+\\/photo\\?v=\\d+$/);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "21. Ver la imagen del servicio",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/services/{{serviceId}}/photo",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "services",
+                "{{serviceId}}",
+                "photo"
+              ]
+            },
+            "description": "Pública, como el catálogo. Devuelve la imagen, no JSON."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('es una imagen PNG', () => {",
+                  "    pm.expect(pm.response.headers.get('Content-Type')).to.eql('image/png');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "22. Imagen con javascript: (400)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenAdmin}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Afeitado clasico\",\n  \"description\": \"Ahora con masaje facial.\",\n  \"priceCop\": 36000,\n  \"category\": \"Barba\",\n  \"imageUrl\": \"javascript:alert(1)\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/services/{{serviceId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "services",
+                "{{serviceId}}"
+              ]
+            },
+            "description": "La URL de la imagen debe ser https. Antes se aceptaba cualquier esquema, también javascript: y data:."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400 Bad Request', () => pm.response.to.have.status(400));",
+                  "pm.test('codigo VALIDATION_ERROR', () => {",
+                  "    pm.expect(pm.response.json().error.code).to.eql('VALIDATION_ERROR');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "23. Eliminar servicio (admin)",
           "request": {
             "method": "DELETE",
             "header": [
@@ -1001,7 +1134,7 @@
       "name": "Citas",
       "item": [
         {
-          "name": "21. Crear cita",
+          "name": "24. Crear cita",
           "request": {
             "method": "POST",
             "header": [
@@ -1125,7 +1258,7 @@
           ]
         },
         {
-          "name": "22. Crear cita duplicada (409)",
+          "name": "25. Crear cita duplicada (409)",
           "request": {
             "method": "POST",
             "header": [
@@ -1212,7 +1345,7 @@
           ]
         },
         {
-          "name": "23. Crear cita con datos invalidos (400)",
+          "name": "26. Crear cita con datos invalidos (400)",
           "request": {
             "method": "POST",
             "header": [
@@ -1262,7 +1395,7 @@
           "response": []
         },
         {
-          "name": "24. Crear cita fuera de franja (422)",
+          "name": "27. Crear cita fuera de franja (422)",
           "request": {
             "method": "POST",
             "header": [
@@ -1310,7 +1443,7 @@
           "response": []
         },
         {
-          "name": "25. Obtener cita por id",
+          "name": "28. Obtener cita por id",
           "request": {
             "method": "GET",
             "header": [],
@@ -1345,7 +1478,7 @@
           "response": []
         },
         {
-          "name": "26. Aplazar cita (cliente)",
+          "name": "29. Aplazar cita (cliente)",
           "request": {
             "method": "POST",
             "header": [
@@ -1398,7 +1531,7 @@
           "response": []
         },
         {
-          "name": "27. Marcar atendida antes de la hora (422)",
+          "name": "30. Marcar atendida antes de la hora (422)",
           "request": {
             "method": "PUT",
             "header": [
@@ -1447,7 +1580,7 @@
           "response": []
         },
         {
-          "name": "28. Marcar sin token (401)",
+          "name": "31. Marcar sin token (401)",
           "request": {
             "method": "PUT",
             "header": [
@@ -1492,7 +1625,7 @@
           "response": []
         },
         {
-          "name": "29. Marcar con un estado inválido (400)",
+          "name": "32. Marcar con un estado inválido (400)",
           "request": {
             "method": "PUT",
             "header": [
@@ -1541,7 +1674,7 @@
           "response": []
         },
         {
-          "name": "30. Cancelar con telefono equivocado (403)",
+          "name": "33. Cancelar con telefono equivocado (403)",
           "request": {
             "method": "POST",
             "header": [
@@ -1587,7 +1720,7 @@
           "response": []
         },
         {
-          "name": "31. Cancelar cita",
+          "name": "34. Cancelar cita",
           "request": {
             "method": "DELETE",
             "header": [
@@ -1627,7 +1760,7 @@
           "response": []
         },
         {
-          "name": "32. Cancelar cita ya cancelada (409)",
+          "name": "35. Cancelar cita ya cancelada (409)",
           "request": {
             "method": "DELETE",
             "header": [
@@ -1667,7 +1800,7 @@
           "response": []
         },
         {
-          "name": "33. Cita inexistente (404)",
+          "name": "36. Cita inexistente (404)",
           "request": {
             "method": "GET",
             "header": [],
@@ -1702,7 +1835,7 @@
           "response": []
         },
         {
-          "name": "34. Agenda completa (admin)",
+          "name": "37. Agenda completa (admin)",
           "request": {
             "method": "GET",
             "header": [
@@ -1741,7 +1874,7 @@
           "response": []
         },
         {
-          "name": "35. Agenda propia (barbero)",
+          "name": "38. Agenda propia (barbero)",
           "request": {
             "method": "GET",
             "header": [
@@ -1782,7 +1915,7 @@
           "response": []
         },
         {
-          "name": "36. Agenda sin token (401)",
+          "name": "39. Agenda sin token (401)",
           "request": {
             "method": "GET",
             "header": [],
@@ -1821,7 +1954,7 @@
       "name": "Gestión de barberos",
       "item": [
         {
-          "name": "37. Crear barbero (admin)",
+          "name": "40. Crear barbero (admin)",
           "request": {
             "method": "POST",
             "header": [
@@ -1879,7 +2012,7 @@
           "response": []
         },
         {
-          "name": "38. Crear barbero repetido (409)",
+          "name": "41. Crear barbero repetido (409)",
           "request": {
             "method": "POST",
             "header": [
@@ -1926,7 +2059,7 @@
           "response": []
         },
         {
-          "name": "39. Crear barbero sin token (401)",
+          "name": "42. Crear barbero sin token (401)",
           "request": {
             "method": "POST",
             "header": [
@@ -1969,7 +2102,7 @@
           "response": []
         },
         {
-          "name": "40. Crear barbero como barbero (403)",
+          "name": "43. Crear barbero como barbero (403)",
           "request": {
             "method": "POST",
             "header": [
@@ -2016,7 +2149,7 @@
           "response": []
         },
         {
-          "name": "41. Crear barbero con foto sin https (400)",
+          "name": "44. Crear barbero con foto sin https (400)",
           "request": {
             "method": "POST",
             "header": [
@@ -2063,7 +2196,7 @@
           "response": []
         },
         {
-          "name": "42. Editar barbero (admin)",
+          "name": "45. Editar barbero (admin)",
           "request": {
             "method": "PUT",
             "header": [
@@ -2116,7 +2249,7 @@
           "response": []
         },
         {
-          "name": "43. Subir foto desde la galería (admin)",
+          "name": "46. Subir foto desde la galería (admin)",
           "request": {
             "method": "PUT",
             "header": [
@@ -2165,7 +2298,7 @@
           "response": []
         },
         {
-          "name": "44. Ver la foto del barbero",
+          "name": "47. Ver la foto del barbero",
           "request": {
             "method": "GET",
             "header": [],
@@ -2206,7 +2339,7 @@
           "response": []
         },
         {
-          "name": "45. Subir algo que no es una imagen (400)",
+          "name": "48. Subir algo que no es una imagen (400)",
           "request": {
             "method": "PUT",
             "header": [
@@ -2255,7 +2388,7 @@
           "response": []
         },
         {
-          "name": "46. Dar acceso al panel (admin)",
+          "name": "49. Dar acceso al panel (admin)",
           "request": {
             "method": "PUT",
             "header": [
@@ -2323,7 +2456,7 @@
           "response": []
         },
         {
-          "name": "47. Iniciar sesión con la cuenta nueva",
+          "name": "50. Iniciar sesión con la cuenta nueva",
           "request": {
             "method": "POST",
             "header": [
@@ -2370,7 +2503,7 @@
           "response": []
         },
         {
-          "name": "48. Dar acceso con el usuario del admin (409)",
+          "name": "51. Dar acceso con el usuario del admin (409)",
           "request": {
             "method": "PUT",
             "header": [
@@ -2419,7 +2552,7 @@
           "response": []
         },
         {
-          "name": "49. Listar cuentas (admin)",
+          "name": "52. Listar cuentas (admin)",
           "request": {
             "method": "GET",
             "header": [
@@ -2466,7 +2599,7 @@
           "response": []
         },
         {
-          "name": "50. Quitar el acceso (admin)",
+          "name": "53. Quitar el acceso (admin)",
           "request": {
             "method": "DELETE",
             "header": [
@@ -2504,7 +2637,7 @@
           "response": []
         },
         {
-          "name": "51. Dar de baja barbero (admin)",
+          "name": "54. Dar de baja barbero (admin)",
           "request": {
             "method": "DELETE",
             "header": [
@@ -2541,7 +2674,7 @@
           "response": []
         },
         {
-          "name": "52. Barbero dado de baja ya no existe (404)",
+          "name": "55. Barbero dado de baja ya no existe (404)",
           "request": {
             "method": "GET",
             "header": [],

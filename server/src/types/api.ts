@@ -166,7 +166,22 @@ export interface Service {
 }
 
 /** Cuerpo de POST y PUT /services: el servidor pone el id. */
-export type ServiceInput = Omit<Service, 'id'>;
+export interface ServiceInput {
+  name: string;
+  description: string;
+  priceCop: number;
+  category: string;
+  /**
+   * URL https de una imagen alojada en otro sitio.
+   *
+   * Al editar distingue tres casos: ausente conserva la imagen actual, null
+   * la quita, y una URL la reemplaza. La imagen de un servicio es opcional,
+   * así que quitarla tiene que poder decirse.
+   */
+  imageUrl?: string | null;
+  /** La imagen misma, en base64 (JPEG o PNG), elegida de la galería. */
+  photo?: string;
+}
 
 /**
  * Rol de una cuenta.

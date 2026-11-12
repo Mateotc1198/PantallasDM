@@ -1,9 +1,9 @@
 import request from 'supertest';
-import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import app from '../../src/app.js';
 import { weekdayOf } from '../../src/utils/time.js';
-import { closeDatabase, fillDay, resetBookings } from '../helpers/db.js';
+import { closeDatabase, fillDay, resetBarbers, resetBookings } from '../helpers/db.js';
 import {
   futureMonth,
   futureOpenDate,
@@ -21,6 +21,13 @@ import {
  * son los correctos.
  */
 
+/**
+ * Estos tests cuentan barberos ("hay dos"), así que parten de los del seed
+ * en vez de fiarse de que el archivo anterior limpiara lo suyo. Si a ese
+ * archivo lo interrumpen a mitad (en Windows pasa de vez en cuando con los
+ * procesos de prueba), su afterAll no llega a ejecutarse.
+ */
+beforeAll(resetBarbers);
 beforeEach(resetBookings);
 afterAll(closeDatabase);
 
