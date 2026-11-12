@@ -8,12 +8,14 @@ import type { AuthUser } from '../types/api.js';
 const PREFIJO_BEARER = 'Bearer ';
 
 /**
- * Exige un token válido y deja la identidad en req.user.
+ * Exige un token válido de una cuenta vigente y deja la identidad en req.user.
  *
  * Lanza en vez de responder: el manejador global de errores es el único sitio
  * que decide códigos HTTP, y así el 401 tiene la misma forma que el resto.
+ * Es asíncrono porque consulta la base; Express 5 lleva al manejador global
+ * los errores de un middleware asíncrono igual que los de uno síncrono.
  */
-export const authenticate: RequestHandler = (req, _res, next) => {
+export const authenticate: RequestHandler = async (req, _res, next) => {
   const cabecera = req.headers.authorization;
 
   if (cabecera === undefined || !cabecera.startsWith(PREFIJO_BEARER)) {
@@ -23,7 +25,7 @@ export const authenticate: RequestHandler = (req, _res, next) => {
     );
   }
 
-  req.user = authService.verifyToken(cabecera.slice(PREFIJO_BEARER.length).trim());
+  req.user = await authService.authenticateToken(cabecera.slice(PREFIJO_BEARER.length).trim());
   next();
 };
 

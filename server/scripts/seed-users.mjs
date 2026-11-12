@@ -15,8 +15,9 @@ import 'dotenv/config';
  * Es idempotente: se ejecuta en cada despliegue y no falla si la cuenta ya
  * existe. Qué hace entonces depende del rol:
  *
- *   admin    actualiza su contraseña. Es la única forma de cambiarla, y de
- *            recuperar el acceso si se pierde.
+ *   admin    actualiza su contraseña si la del entorno es otra. Es la única
+ *            forma de cambiarla, y de recuperar el acceso si se pierde. Si es
+ *            la misma no la toca, para no cerrar su sesión en cada arranque.
  *   barbero  no la toca. Desde que el administrador gestiona las cuentas de
  *            los barberos en el panel, lo que haya puesto ahí manda: este
  *            script solo crea la cuenta inicial si todavía no existe.
@@ -69,9 +70,26 @@ try {
       continue;
     }
 
+    const usuario = cuenta.username.trim().toLowerCase();
+
+    // El administrador solo se toca si su contraseña cambió de verdad. No es
+    // un ahorro: reescribirla en cada arranque cambiaría la versión de sus
+    // credenciales y cerraría su sesión en cada despliegue.
+    if (cuenta.role === 'admin') {
+      const actual = await client.query(
+        'SELECT password_hash FROM users WHERE username = $1 AND role = $2',
+        [usuario, 'admin'],
+      );
+      const fila = actual.rows[0];
+      if (fila !== undefined && (await bcrypt.compare(cuenta.password, fila.password_hash))) {
+        console.log(`  cuenta sin cambios: ${cuenta.username} (admin)`);
+        continue;
+      }
+    }
+
     const hash = await bcrypt.hash(cuenta.password, BCRYPT_ROUNDS);
 
-    const valores = [cuenta.username.trim().toLowerCase(), hash, cuenta.role, cuenta.barberId ?? null];
+    const valores = [usuario, hash, cuenta.role, cuenta.barberId ?? null];
 
     if (cuenta.role === 'barbero') {
       // ON CONFLICT sin columna: se salta la fila si choca con CUALQUIER
@@ -102,9 +120,11 @@ try {
       `INSERT INTO users (username, password_hash, role, barber_id)
        VALUES ($1, $2, $3, $4)
        ON CONFLICT (username) DO UPDATE
-         SET password_hash = EXCLUDED.password_hash,
-             role          = EXCLUDED.role,
-             barber_id     = EXCLUDED.barber_id`,
+         SET password_hash   = EXCLUDED.password_hash,
+             role            = EXCLUDED.role,
+             barber_id       = EXCLUDED.barber_id,
+             -- Contraseña nueva: las sesiones abiertas con la vieja se cierran.
+             session_version = users.session_version + 1`,
       valores,
     );
 

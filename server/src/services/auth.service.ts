@@ -30,6 +30,8 @@ interface TokenPayload {
   username: string;
   role: UserRole;
   barberId: string | null;
+  /** Versión de las credenciales con las que se emitió. */
+  sv: number;
 }
 
 export async function hashPassword(plain: string): Promise<string> {
@@ -63,6 +65,7 @@ export async function login(username: string, password: string): Promise<LoginRe
     username: credenciales.user.username,
     role: credenciales.user.role,
     barberId: credenciales.user.barberId,
+    sv: credenciales.sessionVersion,
   };
 
   const token = jwt.sign(payload, env.jwtSecret, {
@@ -72,24 +75,10 @@ export async function login(username: string, password: string): Promise<LoginRe
   return { token, expiresIn: env.jwtExpiresInSeconds, user: credenciales.user };
 }
 
-/**
- * Verifica la firma y la vigencia del token y reconstruye la identidad.
- *
- * Es stateless: la identidad sale del propio token, sin consultar la base en
- * cada petición. Contrapartida honesta: si a alguien se le cambia el rol o se
- * le borra la cuenta, su token sigue siendo válido hasta que expire (8 h). La
- * solución sería una lista de revocación, que para este tamaño sería
- * sobreingeniería; acortar la vigencia es el ajuste razonable.
- */
-export function verifyToken(token: string): AuthUser {
+/** Verifica la firma y la vigencia del token. Lanza 401 si no valen. */
+function verifyToken(token: string): TokenPayload {
   try {
-    const payload = jwt.verify(token, env.jwtSecret) as TokenPayload;
-    return {
-      id: payload.sub,
-      username: payload.username,
-      role: payload.role,
-      barberId: payload.barberId,
-    };
+    return jwt.verify(token, env.jwtSecret) as TokenPayload;
   } catch (error) {
     if (error instanceof jwt.TokenExpiredError) {
       throw new UnauthorizedError(
@@ -99,4 +88,36 @@ export function verifyToken(token: string): AuthUser {
     }
     throw new UnauthorizedError(ERROR_CODES.UNAUTHORIZED, 'Token inválido.');
   }
+}
+
+/**
+ * De un token, la identidad de quien llama, comprobada contra la base.
+ *
+ * Que el token sea auténtico no basta. Antes la identidad salía solo del
+ * token, y una sesión seguía abierta hasta 8 horas después de que el
+ * administrador le quitara el acceso a un barbero, lo diera de baja o le
+ * cambiara la contraseña: con el token viejo podía seguir viendo, cancelando
+ * y marcando citas.
+ *
+ * Ahora se exige además que la cuenta siga vigente y que la versión de sus
+ * credenciales sea la del token. Cuesta una lectura por clave primaria en
+ * cada petición del panel; a cambio, quitar un acceso surte efecto en la
+ * siguiente petición, no al cabo de horas.
+ *
+ * La identidad que se devuelve es la de la base, no la del token: si el rol o
+ * la ficha cambiaran, manda lo actual.
+ */
+export async function authenticateToken(token: string): Promise<AuthUser> {
+  const payload = verifyToken(token);
+  const sesion = await usersRepository.findActiveSession(payload.sub);
+
+  // Un token de antes de este cambio no lleva sv: tampoco vale, y basta con
+  // volver a iniciar sesión una vez.
+  if (sesion === null || sesion.sessionVersion !== payload.sv) {
+    throw new UnauthorizedError(
+      ERROR_CODES.SESSION_REVOKED,
+      'Tu sesión ya no es válida. Vuelve a iniciar sesión.',
+    );
+  }
+  return sesion.user;
 }

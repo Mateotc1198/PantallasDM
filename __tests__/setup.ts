@@ -35,6 +35,14 @@ jest.mock('expo-secure-store', () => {
 });
 
 /**
+ * El fondo de la ventana nativa: en los tests no hay ventana. El doble deja
+ * comprobar qué color se pidió.
+ */
+jest.mock('expo-system-ui', () => ({
+  setBackgroundColorAsync: jest.fn(() => Promise.resolve()),
+}));
+
+/**
  * Los iconos reales cargan una fuente de forma asíncrona, lo que llena los
  * tests de avisos de act() por algo que no se está probando. Aquí cada
  * icono es un Text con su nombre, suficiente para comprobar cuál se pinta.

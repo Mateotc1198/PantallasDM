@@ -19,11 +19,24 @@ interface UserRow {
 
 interface CredentialsRow extends UserRow {
   password_hash: string;
+  session_version: number;
+}
+
+interface SessionRow extends UserRow {
+  session_version: number;
+}
+
+/** Una cuenta vigente con la versión de sus credenciales. */
+export interface ActiveSession {
+  user: AuthUser;
+  sessionVersion: number;
 }
 
 export interface UserCredentials {
   user: AuthUser;
   passwordHash: string;
+  /** Va dentro del token que se emite con estas credenciales. */
+  sessionVersion: number;
 }
 
 function toAuthUser(row: UserRow): AuthUser {
@@ -47,7 +60,7 @@ export async function findCredentialsByUsername(
   username: string,
 ): Promise<UserCredentials | null> {
   const rows = await query<CredentialsRow>(
-    `SELECT u.id, u.username, u.role, u.barber_id, u.password_hash
+    `SELECT u.id, u.username, u.role, u.barber_id, u.password_hash, u.session_version
      FROM users u
      LEFT JOIN barbers b ON b.id = u.barber_id
      WHERE u.username = $1
@@ -59,7 +72,35 @@ export async function findCredentialsByUsername(
   if (row === undefined) {
     return null;
   }
-  return { user: toAuthUser(row), passwordHash: row.password_hash };
+  return {
+    user: toAuthUser(row),
+    passwordHash: row.password_hash,
+    sessionVersion: row.session_version,
+  };
+}
+
+/**
+ * La cuenta dueña de un token, si sigue vigente.
+ *
+ * null si se borró o si es de un barbero dado de baja: las mismas condiciones
+ * que impiden iniciar sesión impiden seguir usando una sesión abierta. Lo
+ * consulta cada petición del panel; por clave primaria, es una lectura
+ * barata.
+ */
+export async function findActiveSession(id: string): Promise<ActiveSession | null> {
+  const rows = await query<SessionRow>(
+    `SELECT u.id, u.username, u.role, u.barber_id, u.session_version
+     FROM users u
+     LEFT JOIN barbers b ON b.id = u.barber_id
+     WHERE u.id = $1
+       AND (u.barber_id IS NULL OR b.deleted_at IS NULL)`,
+    [id],
+  );
+
+  const row = rows[0];
+  return row === undefined
+    ? null
+    : { user: toAuthUser(row), sessionVersion: row.session_version };
 }
 
 /** Código de Postgres para violación de restricción UNIQUE. */
@@ -108,8 +149,11 @@ export async function setBarberAccount(
       `INSERT INTO users (username, password_hash, role, barber_id)
        VALUES ($1, $2, 'barbero', $3)
        ON CONFLICT (barber_id) WHERE barber_id IS NOT NULL DO UPDATE
-         SET username      = EXCLUDED.username,
-             password_hash = EXCLUDED.password_hash
+         SET username        = EXCLUDED.username,
+             password_hash   = EXCLUDED.password_hash,
+             -- Credenciales nuevas: las sesiones abiertas con las viejas
+             -- dejan de valer.
+             session_version = users.session_version + 1
        RETURNING id, username, role, barber_id`,
       [username, passwordHash, barberId],
     );

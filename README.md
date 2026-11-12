@@ -20,10 +20,12 @@ Proyecto final de Desarrollo de Dispositivos Móviles.
 | Integración continua | [GitHub Actions](https://github.com/Mateotc1198/PantallasDM/actions/workflows/ci.yml) |
 | Colección de Postman | [`server/postman/`](server/postman) |
 
-> **La primera petición tarda unos 20 segundos.** El plan gratuito de Render
-> duerme el servicio tras un rato sin tráfico. La app lo avisa en pantalla
-> ("El servidor estaba inactivo y está despertando") en vez de quedarse en
-> blanco.
+> **El servidor se mantiene despierto de 7:00 a 23:00 (hora de Colombia).** El
+> plan gratuito de Render lo duerme tras unos 15 minutos sin tráfico, y la
+> primera petición después tarda unos 20 segundos. Una tarea programada de
+> GitHub Actions ([`mantener-despierta.yml`](.github/workflows/mantener-despierta.yml))
+> lo consulta cada 10 minutos en ese horario. Fuera de él, si toca esperar, la
+> app lo avisa en pantalla en vez de quedarse en blanco.
 
 > **El CI y Sonar corren en un fork.** Este repositorio es el de la entrega; las
 > ejecuciones de GitHub Actions, el análisis de Sonar y el despliegue en Render
