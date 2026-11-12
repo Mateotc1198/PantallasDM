@@ -2,7 +2,12 @@ import type { Request, Response } from 'express';
 
 import * as barbersService from '../../../services/barbers.service.js';
 import * as slotsService from '../../../services/slots.service.js';
-import { barberIdParamsSchema, monthQuerySchema, slotsQuerySchema } from '../dto/barbers.dto.js';
+import {
+  barberIdParamsSchema,
+  barberInputSchema,
+  monthQuerySchema,
+  slotsQuerySchema,
+} from '../dto/barbers.dto.js';
 
 /**
  * Controladores de barberos.
@@ -25,6 +30,36 @@ export async function getById(req: Request, res: Response): Promise<void> {
   const { id } = barberIdParamsSchema.parse(req.params);
   const barber = await barbersService.getById(id);
   res.status(200).json(barber);
+}
+
+/** POST /api/v1/barbers */
+export async function create(req: Request, res: Response): Promise<void> {
+  const input = barberInputSchema.parse(req.body);
+  const barber = await barbersService.create(input);
+
+  res.status(201).location(`/api/v1/barbers/${barber.id}`).json(barber);
+}
+
+/**
+ * PUT /api/v1/barbers/:id
+ *
+ * Reemplazo completo, igual que en servicios: el formulario envía todos los
+ * campos, y así no hay que distinguir "no lo envié" de "quiero vaciarlo".
+ */
+export async function update(req: Request, res: Response): Promise<void> {
+  const { id } = barberIdParamsSchema.parse(req.params);
+  const input = barberInputSchema.parse(req.body);
+
+  const barber = await barbersService.update(id, input);
+  res.status(200).json(barber);
+}
+
+/** DELETE /api/v1/barbers/:id */
+export async function remove(req: Request, res: Response): Promise<void> {
+  const { id } = barberIdParamsSchema.parse(req.params);
+  await barbersService.remove(id);
+
+  res.status(204).end();
 }
 
 /** GET /api/v1/barbers/:id/slots?date=YYYY-MM-DD */

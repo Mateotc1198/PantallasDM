@@ -226,6 +226,9 @@ Todos bajo `/api/v1`.
 | 15 | `POST` | `/services` | **admin** | Crear servicio |
 | 16 | `PUT` | `/services/:id` | **admin** | Editar servicio |
 | 17 | `DELETE` | `/services/:id` | **admin** | Eliminar servicio |
+| 18 | `POST` | `/barbers` | **admin** | Crear barbero |
+| 19 | `PUT` | `/barbers/:id` | **admin** | Editar ficha y foto |
+| 20 | `DELETE` | `/barbers/:id` | **admin** | Dar de baja |
 
 Fuera del contrato de negocio: `GET /health`, sonda de infraestructura.
 
@@ -235,7 +238,7 @@ Fuera del contrato de negocio: `GET /health`, sonda de infraestructura.
 | --- | --- |
 | Público (sin cuenta) | Ver barberos y disponibilidad, **reservar**, consultar su cita por el id |
 | `barbero` | Todo lo anterior, más ver y cancelar **sus propias** citas |
-| `admin` | Todo lo anterior, sobre **todas** las citas |
+| `admin` | Todo lo anterior, sobre **todas** las citas. Además gestiona el catálogo de servicios y la plantilla de barberos |
 
 Reservar es público a propósito: el cliente no necesita cuenta, igual que en el
 diseño. Consultar una cita por su id también, porque es el recibo del cliente y
@@ -266,11 +269,14 @@ petición para que un filtro de interfaz deje de proteger nada.
 | `POST /services` | `201` + `Location` | `400` `401` `403` `409` `500` |
 | `PUT /services/:id` | `200` | `400` `401` `403` `404` `409` `500` |
 | `DELETE /services/:id` | `204` | `400` `401` `403` `404` `500` |
+| `POST /barbers` | `201` + `Location` | `400` `401` `403` `409` `500` |
+| `PUT /barbers/:id` | `200` | `400` `401` `403` `404` `409` `500` |
+| `DELETE /barbers/:id` | `204` | `401` `403` `404` `409` `500` |
 
 ### El catálogo de servicios
 
-Es el único recurso con escritura completa desde el panel, y el único donde
-`admin` y `barbero` no valen lo mismo: el barbero tiene sesión válida y aun así
+Fue el primer recurso con escritura completa desde el panel, y donde `admin` y
+`barbero` dejan de valer lo mismo: el barbero tiene sesión válida y aun así
 recibe `403`, porque el precio de un corte es una decisión del negocio y no de
 quien lo ejecuta.
 
@@ -291,6 +297,34 @@ creando a la vez pasarían ambos un control hecho en el código.
 A diferencia de los horarios, el seed **no sobrescribe** el catálogo en cada
 arranque. Solo siembra si la tabla está vacía, porque aquí sí manda el
 administrador: sería absurdo que un despliegue le deshiciera los precios.
+
+### La gestión de barberos
+
+El administrador crea, edita y da de baja barberos. Escribe tres cosas: nombre,
+especialidad y la **URL** de la foto (el servidor no aloja archivos, y la URL
+debe ser `https`). Todo lo demás lo decide el servidor:
+
+- **El id sale del nombre** (`Luis Gómez` → `luis-gomez`) y no cambia nunca,
+  aunque el nombre se edite: viaja en URLs y lo referencian las citas. Si ese id
+  ya está ocupado, se le añade un sufijo corto al azar.
+- **Nace con horario**: los siete días de 9:00 a 21:00. El barbero y sus siete
+  filas de `barber_schedules` se insertan en una sola sentencia, así que no
+  puede quedar un barbero visible en la app que nadie pueda reservar.
+- **La calificación y los conteos se calculan**, no se escriben. `servicesCount`
+  cuenta el catálogo, que es global.
+
+**La baja es lógica** (`deleted_at`), no un `DELETE`. Dos razones: las citas
+pasadas referencian al barbero y son el historial del negocio, y el seed corre
+en cada arranque, así que una fila borrada de verdad resucitaría en el siguiente
+despliegue. Para el cliente un barbero dado de baja no existe: desaparece de la
+lista, responde `404` y su cuenta ya no puede iniciar sesión.
+
+**No se puede dar de baja a quien tiene citas activas de hoy en adelante**
+(`409 BARBER_HAS_BOOKINGS`). Cada una es un compromiso con un cliente: el
+administrador las cancela primero desde la agenda. La comprobación va dentro
+del mismo `UPDATE` que da la baja, no en una consulta previa.
+
+Los horarios **no** se editan desde el panel: los gobierna el seed.
 
 ### El cliente no tiene cuenta
 
@@ -455,7 +489,7 @@ La colección se ejecuta entera de corrido con el Collection Runner:
   peticiones siguientes lo reutilizan: no hay que copiar ids a mano.
 - El login **guarda el token** en una variable y las peticiones protegidas lo
   usan como `Bearer`. Tampoco hay que copiar tokens a mano.
-- Las 22 peticiones llevan tests que verifican código HTTP y forma de respuesta.
+- Las 41 peticiones llevan tests que verifican código HTTP y forma de respuesta.
 
 El environment se versiona con las **contraseñas vacías**: una contraseña
 commiteada es una contraseña publicada. Rellena `adminPassword` y
@@ -477,8 +511,9 @@ npm run db:setup:test   # una sola vez: prepara la base aislada de tests
 npm test
 ```
 
-- **Unitarios** (`tests/unit/`): la lógica pura de horarios. Sin base de datos.
-- **Integración** (`tests/integration/`): los 6 endpoints contra PostgreSQL real
+- **Unitarios** (`tests/unit/`): la lógica pura de horarios y de identificadores.
+  Sin base de datos.
+- **Integración** (`tests/integration/`): los 20 endpoints contra PostgreSQL real
   con supertest.
 
 Corren contra `pantallasdm_test`, una base distinta de la de desarrollo: los

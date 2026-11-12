@@ -32,11 +32,36 @@ CREATE TABLE IF NOT EXISTS barbers (
   name           TEXT        NOT NULL,
   specialty      TEXT        NOT NULL,
   avatar_url     TEXT        NOT NULL,
+  -- OBSOLETA: ya no se lee. El catalogo es global, asi que el numero de
+  -- servicios se cuenta en la tabla services. La columna se conserva (en vez
+  -- de un DROP) para que un despliegue no rompa a la version anterior del
+  -- codigo mientras ambas conviven unos segundos.
   services_count SMALLINT    NOT NULL DEFAULT 0 CHECK (services_count >= 0),
-  created_at     TIMESTAMPTZ NOT NULL DEFAULT now()
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+  deleted_at     TIMESTAMPTZ
 );
 
 COMMENT ON TABLE barbers IS 'Barberos. El id es un slug legible, no un UUID, porque viaja en la URL.';
+
+-- BORRADO LOGICO. Dar de baja a un barbero pone deleted_at; la fila se queda.
+--
+-- Borrarla de verdad tendria dos problemas. Sus citas pasadas la referencian
+-- (ON DELETE RESTRICT) y son el historial del negocio. Y seed.sql se ejecuta
+-- en cada arranque con ON CONFLICT DO NOTHING: una fila borrada de verdad
+-- resucitaria sola en el siguiente despliegue.
+--
+-- Las bases que ya existian no pasan por el CREATE TABLE de arriba, de ahi el
+-- ALTER idempotente.
+ALTER TABLE barbers ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
+
+COMMENT ON COLUMN barbers.deleted_at IS 'Momento de la baja. NULL = barbero activo.';
+
+-- Dos barberos activos no pueden llamarse igual: el cliente no sabria a cual
+-- esta reservando. Es PARCIAL para que el nombre de alguien dado de baja
+-- quede libre y se pueda volver a usar.
+CREATE UNIQUE INDEX IF NOT EXISTS barbers_nombre_unico
+  ON barbers (lower(name))
+  WHERE deleted_at IS NULL;
 
 -- ---------------------------------------------------------------------------
 -- reviews
