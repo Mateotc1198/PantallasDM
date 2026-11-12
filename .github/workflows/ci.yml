@@ -23,7 +23,7 @@ jobs:
   # Aplicación móvil
   # ===========================================================================
   app:
-    name: App (lint, tipos y bundle)
+    name: App (lint, tipos, tests y bundle)
     runs-on: ubuntu-latest
 
     steps:
@@ -45,6 +45,18 @@ jobs:
 
       - name: Tipos
         run: npm run typecheck
+
+      # Jest corre en Node con dobles de los modulos nativos: no necesita
+      # emulador ni base de datos, por eso este trabajo no levanta servicios.
+      - name: Tests con cobertura
+        run: npm run test:coverage
+
+      - name: Guardar la cobertura
+        uses: actions/upload-artifact@v7
+        with:
+          name: cobertura-app
+          path: coverage/lcov.info
+          retention-days: 1
 
       # El bundle es la prueba de que la aplicación todavía compila de
       # verdad. El typecheck no la da: Metro resuelve módulos y assets que
@@ -112,6 +124,13 @@ jobs:
       - name: Tests con cobertura
         run: npm run test:coverage
 
+      # vitest escribe las rutas relativas a server/ ("src/app.ts"), pero Sonar
+      # analiza desde la raiz del repositorio, donde src/ es la carpeta de la
+      # APLICACION. Sin anteponer el prefijo no encontraria los archivos del
+      # backend y su cobertura apareceria en cero.
+      - name: Ajustar las rutas del informe a la raiz del repositorio
+        run: sed -i "s|^SF:|SF:server/|" coverage/lcov.info
+
       # El informe se guarda para que el trabajo de Sonar lo recoja: cada
       # trabajo corre en una máquina distinta y no comparte disco.
       - name: Guardar la cobertura
@@ -142,11 +161,19 @@ jobs:
           # su commit y distinguir el código nuevo del heredado.
           fetch-depth: 0
 
-      - name: Recuperar la cobertura
+      # Cada informe vuelve a la ruta donde se genero: Sonar los localiza por
+      # las rutas declaradas en sonar-project.properties.
+      - name: Recuperar la cobertura de la API
         uses: actions/download-artifact@v8
         with:
           name: cobertura-api
           path: server/coverage
+
+      - name: Recuperar la cobertura de la app
+        uses: actions/download-artifact@v8
+        with:
+          name: cobertura-app
+          path: coverage
 
       - name: Analizar
         if: env.SONAR_TOKEN != ''
