@@ -250,6 +250,17 @@ CREATE INDEX IF NOT EXISTS services_category_idx ON services (category);
 -- servicio escrito por dos personas distintas.
 CREATE UNIQUE INDEX IF NOT EXISTS services_nombre_unico ON services (lower(name));
 
+-- La imagen de un servicio subida desde la galeria. Mismo diseno y mismas
+-- restricciones que barber_photos: tabla aparte para que listar el catalogo
+-- no arrastre los bytes, y los CHECK repiten lo que valida el codigo.
+-- ON DELETE CASCADE: al eliminar el servicio, su imagen no sirve a nadie.
+CREATE TABLE IF NOT EXISTS service_photos (
+  service_id   UUID        PRIMARY KEY REFERENCES services(id) ON DELETE CASCADE,
+  content      BYTEA       NOT NULL CHECK (octet_length(content) <= 307200),
+  content_type TEXT        NOT NULL CHECK (content_type IN ('image/jpeg', 'image/png')),
+  updated_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
 -- ---------------------------------------------------------------------------
 -- El servicio de cada cita
 --

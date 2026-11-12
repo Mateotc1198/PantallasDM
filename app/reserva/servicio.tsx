@@ -8,6 +8,7 @@ import { BarberChip } from '../../src/components/BarberChip';
 import { Card } from '../../src/components/Card';
 import { ErrorState } from '../../src/components/ErrorState';
 import { LoadingState } from '../../src/components/LoadingState';
+import { ServiceThumb } from '../../src/components/ServiceThumb';
 import { StepHeader } from '../../src/components/StepHeader';
 import { useBooking } from '../../src/context/BookingContext';
 import { getServices } from '../../src/data/services';
@@ -123,6 +124,9 @@ export default function ServicioScreen() {
                   accessibilityLabel={`Elegir ${item.name}, ${formatCop(item.priceCop)}`}
                 >
                   <View style={styles.row}>
+                    {item.imageUrl !== null ? (
+                      <ServiceThumb uri={item.imageUrl} nombre={item.name} size={52} />
+                    ) : null}
                     <View style={styles.info}>
                       <Text style={styles.name}>{item.name}</Text>
                       {item.description.length > 0 ? (

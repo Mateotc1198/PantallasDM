@@ -49,6 +49,8 @@ export const ERROR_CODES = {
   ACCOUNT_NOT_FOUND: 'ACCOUNT_NOT_FOUND',
 
   SERVICE_NOT_FOUND: 'SERVICE_NOT_FOUND',
+  /** 404 - ese servicio no tiene una imagen subida. */
+  SERVICE_PHOTO_NOT_FOUND: 'SERVICE_PHOTO_NOT_FOUND',
   /** 409 - ya hay un servicio con ese nombre. */
   SERVICE_NAME_TAKEN: 'SERVICE_NAME_TAKEN',
 

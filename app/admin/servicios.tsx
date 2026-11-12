@@ -1,20 +1,36 @@
 import { CrudRow } from '../../src/components/CrudRow';
 import { CrudScreen } from '../../src/components/CrudScreen';
 import { FormField } from '../../src/components/FormField';
+import { PhotoField } from '../../src/components/PhotoField';
+import { ServiceThumb } from '../../src/components/ServiceThumb';
 import { useAuth } from '../../src/context/AuthContext';
 import { createService, deleteService, getServices, updateService } from '../../src/data/services';
 import { useAsync } from '../../src/hooks/useAsync';
 import { useCrudForm } from '../../src/hooks/useCrudForm';
+import type { FotoElegida } from '../../src/media/photoPicker';
 import type { Service, ServiceInput } from '../../src/types/api';
 import { formatCop } from '../../src/utils/money';
 
-/** Lo que hay en el formulario: todo texto, porque eso es lo que se teclea. */
+/**
+ * Lo que hay en el formulario.
+ *
+ * Los campos que se teclean son texto. La imagen puede venir de la galería o
+ * de una URL, y gana lo último que se usa; además, como es opcional, se puede
+ * quitar.
+ */
 interface Formulario {
   name: string;
   description: string;
   priceCop: string;
   category: string;
+  /** URL nueva escrita a mano. Vacía = no se cambia por URL. */
   imageUrl: string;
+  /** Imagen nueva de la galería, pendiente de subir. */
+  foto: FotoElegida | null;
+  /** La imagen que el servicio ya tiene, solo para enseñarla. */
+  imagenActual: string | null;
+  /** Se pidió quitar la imagen actual. */
+  quitar: boolean;
 }
 
 const FORMULARIO_VACIO: Formulario = {
@@ -23,7 +39,13 @@ const FORMULARIO_VACIO: Formulario = {
   priceCop: '',
   category: '',
   imageUrl: '',
+  foto: null,
+  imagenActual: null,
+  quitar: false,
 };
+
+/** Una dirección https sin espacios. La misma regla que aplica el servidor. */
+const URL_HTTPS = /^https:\/\/\S+$/i;
 
 const TEXTOS = {
   titulo: 'Catálogo',
@@ -42,8 +64,25 @@ function aFormulario(servicio: Service): Formulario {
     description: servicio.description,
     priceCop: String(servicio.priceCop),
     category: servicio.category,
-    imageUrl: servicio.imageUrl ?? '',
+    // El campo de URL es para una NUEVA: empieza vacío. Si se llenara con la
+    // actual, guardar sin tocar nada la mandaría de vuelta.
+    imageUrl: '',
+    foto: null,
+    imagenActual: servicio.imageUrl,
+    quitar: false,
   };
+}
+
+/** Lo que se enseña en el cuadro de la imagen: lo último que se eligió. */
+function vistaPreviaDe(form: Formulario): string | null {
+  if (form.foto !== null) {
+    return form.foto.uri;
+  }
+  const url = form.imageUrl.trim();
+  if (URL_HTTPS.test(url)) {
+    return url;
+  }
+  return form.quitar ? null : form.imagenActual;
 }
 
 /**
@@ -65,22 +104,37 @@ function validar(form: Formulario): string | null {
   if (!Number.isInteger(precio) || precio < 0) {
     return 'El precio debe ser un número entero de pesos.';
   }
-  if (form.imageUrl.trim().length > 0 && !/^https?:\/\/\S+$/i.test(form.imageUrl.trim())) {
-    return 'La imagen debe ser una URL que empiece por http.';
+  const url = form.imageUrl.trim();
+  if (url.length > 0 && !URL_HTTPS.test(url)) {
+    return 'La URL de la imagen debe empezar por https://';
   }
   return null;
 }
 
+/**
+ * Lo que viaja a la API. De la imagen va como mucho una cosa: la de la
+ * galería, la URL nueva, null para quitarla, o nada, y entonces el servidor
+ * conserva la que había.
+ */
 function aEntrada(form: Formulario): ServiceInput {
-  const imagen = form.imageUrl.trim();
-  return {
+  const datos = {
     name: form.name.trim(),
     description: form.description.trim(),
     priceCop: Number(form.priceCop),
     category: form.category.trim(),
-    // Cadena vacía no es una URL: hacia el servidor viaja null.
-    imageUrl: imagen.length > 0 ? imagen : null,
   };
+  const url = form.imageUrl.trim();
+
+  if (form.foto !== null) {
+    return { ...datos, photo: form.foto.base64 };
+  }
+  if (url.length > 0) {
+    return { ...datos, imageUrl: url };
+  }
+  if (form.quitar && form.imagenActual !== null) {
+    return { ...datos, imageUrl: null };
+  }
+  return datos;
 }
 
 /**
@@ -89,7 +143,7 @@ function aEntrada(form: Formulario): ServiceInput {
  * La mecánica (abrir, validar, guardar, confirmar el borrado) y el armazón de
  * la pantalla son comunes a todo el panel y viven en useCrudForm y
  * CrudScreen. Aquí queda solo lo propio de un servicio: sus campos, sus
- * reglas y cómo se pinta en la lista.
+ * reglas, su imagen y cómo se pinta en la lista.
  */
 export default function AdminServiciosScreen() {
   const { user } = useAuth();
@@ -152,14 +206,42 @@ export default function AdminServiciosScreen() {
             editable={editable}
             multilinea
           />
-          <FormField
+          <PhotoField
             etiqueta="Imagen (opcional)"
+            forma="cuadrado"
+            iconoVacio="image-outline"
+            vistaPrevia={vistaPreviaDe(form)}
+            hayFotoNueva={form.foto !== null}
+            tieneFotoActual={form.imagenActual !== null && !form.quitar}
+            editable={editable}
+            // Con función: la galería tarda, y lo escrito mientras tanto no
+            // se pierde.
+            onElegida={(foto) =>
+              setForm((actual) => ({ ...actual, foto, imageUrl: '', quitar: false }))
+            }
+            onQuitar={() =>
+              setForm((actual) => ({ ...actual, foto: null, imageUrl: '', quitar: true }))
+            }
+          />
+          <FormField
+            etiqueta="O pega la URL de una imagen"
             valor={form.imageUrl}
-            onChange={(imageUrl) => setForm({ ...form, imageUrl })}
+            onChange={(imageUrl) =>
+              setForm((actual) => {
+                const escrita = imageUrl.trim().length > 0;
+                return {
+                  ...actual,
+                  imageUrl,
+                  // Escribir una URL descarta la imagen elegida y deshace "quitar".
+                  foto: escrita ? null : actual.foto,
+                  quitar: escrita ? false : actual.quitar,
+                };
+              })
+            }
             editable={editable}
             teclado="url"
             textoLibre={false}
-            ayuda="URL que empiece por http. El servidor no aloja archivos."
+            ayuda="Opcional. Debe empezar por https://"
           />
         </>
       }
@@ -170,6 +252,11 @@ export default function AdminServiciosScreen() {
           nombre={servicio.name}
           detalle={servicio.category}
           valor={formatCop(servicio.priceCop)}
+          inicio={
+            servicio.imageUrl !== null ? (
+              <ServiceThumb uri={servicio.imageUrl} nombre={servicio.name} size={48} />
+            ) : undefined
+          }
           onEditar={() => crud.abrirEdicion(servicio)}
           onEliminar={() => crud.confirmarBorrado(servicio)}
           eliminando={crud.borrandoId === servicio.id}

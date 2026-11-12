@@ -234,6 +234,7 @@ Todos bajo `/api/v1`.
 | 23 | `GET` | `/users` | **admin** | Cuentas de acceso existentes |
 | 24 | `GET` | `/barbers/:id/photo` | público | La foto subida de un barbero (imagen, no JSON) |
 | 25 | `PUT` | `/bookings/:id/status` | **admin · barbero** | Marcar una cita como atendida o "no vino" |
+| 26 | `GET` | `/services/:id/photo` | público | La imagen subida de un servicio (imagen, no JSON) |
 
 Fuera del contrato de negocio: `GET /health`, sonda de infraestructura.
 
@@ -272,8 +273,9 @@ petición para que un filtro de interfaz deje de proteger nada.
 | `POST /bookings/:id/reschedule` | `200` | `400` `403` `404` `409` `422` `429` `500` |
 | `GET /services` | `200` | `500` |
 | `GET /services/:id` | `200` | `400` `404` `500` |
-| `POST /services` | `201` + `Location` | `400` `401` `403` `409` `500` |
-| `PUT /services/:id` | `200` | `400` `401` `403` `404` `409` `500` |
+| `GET /services/:id/photo` | `200` (imagen) | `400` `404` `500` |
+| `POST /services` | `201` + `Location` | `400` `401` `403` `409` `413` `500` |
+| `PUT /services/:id` | `200` | `400` `401` `403` `404` `409` `413` `500` |
 | `DELETE /services/:id` | `204` | `400` `401` `403` `404` `500` |
 | `POST /barbers` | `201` + `Location` | `400` `401` `403` `409` `413` `500` |
 | `PUT /barbers/:id` | `200` | `400` `401` `403` `404` `409` `413` `500` |
@@ -308,25 +310,31 @@ A diferencia de los horarios, el seed **no sobrescribe** el catálogo en cada
 arranque. Solo siembra si la tabla está vacía, porque aquí sí manda el
 administrador: sería absurdo que un despliegue le deshiciera los precios.
 
-### La foto de los barberos
+### Las fotos de barberos y servicios
 
-La app sube la foto en base64 dentro del mismo `POST` o `PUT` del barbero, en
-el campo `photo`. Antes de enviarla la recorta en cuadrado y la reduce a 512 px,
+La app sube la foto en base64 dentro del mismo `POST` o `PUT` del barbero o del
+servicio, en el campo `photo`. Antes de enviarla la recorta en cuadrado y la reduce a 512 px,
 así que pesa unos 50 KB.
 
 | Decisión | Por qué |
 | --- | --- |
-| Se guarda en la base (`barber_photos`), no en disco | En la nube cada despliegue arranca con el disco limpio. Un servicio externo como Cloudinary añadiría una cuenta y unas claves; para un puñado de fotos de 50 KB no compensa. |
-| Tabla aparte, no columna de `barbers` | Listar barberos no arrastra los bytes de todas las fotos. |
+| Se guarda en la base (`barber_photos`, `service_photos`), no en disco | En la nube cada despliegue arranca con el disco limpio. Un servicio externo como Cloudinary añadiría una cuenta y unas claves; para un puñado de fotos de 50 KB no compensa. |
+| Tabla aparte, no columna de `barbers` ni de `services` | Listar barberos o el catálogo no arrastra los bytes de todas las fotos. |
 | El formato se lee de los **bytes**, no del cliente | Solo se aceptan JPEG y PNG, reconocidos por su firma. Un SVG es texto que puede llevar un script y no entra, aunque llegue en base64 válido. |
 | Máximo 300 KB, comprobado dos veces | En el servidor tras decodificar, y en la base con un `CHECK`. |
-| El cuerpo grande se lee **después** de comprobar la sesión | Esas dos rutas admiten 450 KB; el resto de la API sigue en 10 KB. Si se leyera antes, cualquiera sin sesión podría hacer que el servidor procesara 450 KB para responderle 401. |
+| El cuerpo grande se lee **después** de comprobar la sesión | Las rutas de crear y editar barberos y servicios admiten 450 KB; el resto de la API sigue en 10 KB. Si se leyera antes, cualquiera sin sesión podría hacer que el servidor procesara 450 KB para responderle 401. |
 | La URL de la foto lleva `?v=` y caché de un año | La URL cambia en cada subida, así que el teléfono nunca enseña la foto vieja. |
-| El dominio del avatar sale de la petición | La misma respuesta funciona en local, en la red de casa y en producción sin configurar nada. |
+| El dominio de la URL sale de la petición | La misma respuesta funciona en local, en la red de casa y en producción sin configurar nada. |
 
-Editar sin `photo` ni `avatar` conserva la foto actual. Pasar a una URL externa
+Editar sin `photo` ni URL conserva la foto actual. Pasar a una URL externa
 borra la foto subida. Si una versión anterior de la app reenvía la URL de la
-propia foto del barbero, el servidor la reconoce y la conserva.
+propia foto, el servidor la reconoce y la conserva.
+
+La imagen de un **servicio** es opcional, así que además se puede quitar:
+`"imageUrl": null` la borra. Ausente, la conserva.
+
+Las URLs externas, de barberos y de servicios, deben ser `https`. La de los
+servicios aceptaba antes cualquier esquema, también `javascript:` y `data:`.
 
 ### La gestión de barberos
 
@@ -601,7 +609,7 @@ La colección se ejecuta entera de corrido con el Collection Runner:
   peticiones siguientes lo reutilizan: no hay que copiar ids a mano.
 - El login **guarda el token** en una variable y las peticiones protegidas lo
   usan como `Bearer`. Tampoco hay que copiar tokens a mano.
-- Las 52 peticiones llevan tests que verifican código HTTP y forma de respuesta.
+- Las 55 peticiones llevan tests que verifican código HTTP y forma de respuesta.
 
 El environment se versiona con las **contraseñas vacías**: una contraseña
 commiteada es una contraseña publicada. Rellena `adminPassword` y
@@ -625,7 +633,7 @@ npm test
 
 - **Unitarios** (`tests/unit/`): la lógica pura de horarios y de identificadores.
   Sin base de datos.
-- **Integración** (`tests/integration/`): los 25 endpoints contra PostgreSQL real
+- **Integración** (`tests/integration/`): los 26 endpoints contra PostgreSQL real
   con supertest.
 
 Corren contra `pantallasdm_test`, una base distinta de la de desarrollo: los
@@ -643,7 +651,7 @@ tests vacían tablas y hacerlo sobre datos reales sería inaceptable.
 | CORS abierto | Lista blanca por variable de entorno. Sin orígenes configurados no se permite ninguno, en vez de abrir a `*`. |
 | Fuga de información | El `500` nunca devuelve stack ni mensajes de Postgres: se quedan en el log del servidor. |
 | Spam de reservas | `express-rate-limit` en `POST /bookings`: 10 por minuto. |
-| Payload gigante | `express.json({ limit: '10kb' })`. Solo las dos rutas que reciben la foto admiten 450 KB, y lo leen después de comprobar que quien llama es administrador. |
+| Payload gigante | `express.json({ limit: '10kb' })`. Solo las rutas que reciben una foto admiten 450 KB, y lo leen después de comprobar que quien llama es administrador. |
 
 ### Autenticación
 

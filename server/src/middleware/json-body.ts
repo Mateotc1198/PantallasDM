@@ -24,20 +24,21 @@ const leerJsonGeneral = express.json({ limit: '10kb' });
  */
 export const leerJsonConFoto: RequestHandler = express.json({ limit: '450kb' });
 
-/** POST /api/v1/barbers (con barra final o sin ella). */
-const CREAR_BARBERO = /^\/api\/v1\/barbers\/?$/;
+/** POST /api/v1/barbers o /api/v1/services (con barra final o sin ella). */
+const CREAR_CON_FOTO = /^\/api\/v1\/(barbers|services)\/?$/;
 
 /**
- * PUT /api/v1/barbers/:id, y nada por debajo de ella: la cuenta de acceso
- * (/api/v1/barbers/:id/account) no lleva foto y sigue con el límite general.
+ * PUT /api/v1/barbers/:id o /api/v1/services/:id, y nada por debajo: la
+ * cuenta de acceso (/api/v1/barbers/:id/account) no lleva foto y sigue con el
+ * límite general.
  */
-const EDITAR_BARBERO = /^\/api\/v1\/barbers\/[^/]+\/?$/;
+const EDITAR_CON_FOTO = /^\/api\/v1\/(barbers|services)\/[^/]+\/?$/;
 
-/** ¿Es una de las dos rutas que leen su cuerpo con leerJsonConFoto? */
+/** ¿Es una de las rutas que leen su cuerpo con leerJsonConFoto? */
 export function llevaFoto(req: Request): boolean {
   return (
-    (req.method === 'POST' && CREAR_BARBERO.test(req.path)) ||
-    (req.method === 'PUT' && EDITAR_BARBERO.test(req.path))
+    (req.method === 'POST' && CREAR_CON_FOTO.test(req.path)) ||
+    (req.method === 'PUT' && EDITAR_CON_FOTO.test(req.path))
   );
 }
 
