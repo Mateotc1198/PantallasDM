@@ -10,19 +10,45 @@ import type { Booking, CreateBookingInput } from '../types/api';
  */
 
 /**
+ * Una cita tal como puede llegar de la red: sin el campo `service`.
+ *
+ * El tipo Booking promete que `service` siempre está (con el servicio o con
+ * null). Pero eso es lo que promete ESTA versión del servidor, y la app
+ * instalada en un teléfono no se actualiza a la vez que él: un servidor
+ * anterior, o uno al que se haya revertido un despliegue, responde citas sin
+ * ese campo.
+ */
+type BookingDeLaApi = Omit<Booking, 'service'> & { service?: Booking['service'] };
+
+/**
+ * Deja la cita en la forma que el resto de la app da por sentada.
+ *
+ * Sin esto, un `service` ausente llega como undefined, pasa la comprobación
+ * `service !== null` de las pantallas y la app se cae al leer su nombre. Pasó
+ * de verdad, al probar la app nueva contra el servidor todavía sin desplegar.
+ *
+ * Se resuelve aquí y no en cada pantalla porque esta capa es la frontera con
+ * la red: lo que la cruza ya cumple el tipo, y ninguna pantalla tiene que
+ * acordarse de desconfiar.
+ */
+function normalizar(cita: BookingDeLaApi): Booking {
+  return { ...cita, service: cita.service ?? null };
+}
+
+/**
  * POST /bookings
  *
  * El 409 no es un fallo del cliente ni del servidor: es la carrera que el
  * índice único parcial de la base está ahí para ganar. Entre que el usuario
  * eligió las 10:00 y escribió su nombre, otra persona pudo reservarlas.
  */
-export function createBooking(input: CreateBookingInput): Promise<Booking> {
-  return apiPost<Booking>('/api/v1/bookings', input);
+export async function createBooking(input: CreateBookingInput): Promise<Booking> {
+  return normalizar(await apiPost<BookingDeLaApi>('/api/v1/bookings', input));
 }
 
 /** GET /bookings/:id — consulta pública, para que el cliente verifique su cita. */
-export function getBooking(id: string): Promise<Booking> {
-  return apiGet<Booking>(`/api/v1/bookings/${encodeURIComponent(id)}`);
+export async function getBooking(id: string): Promise<Booking> {
+  return normalizar(await apiGet<BookingDeLaApi>(`/api/v1/bookings/${encodeURIComponent(id)}`));
 }
 
 /**
@@ -45,17 +71,17 @@ export function cancelBookingAsCustomer(id: string, customerPhone: string): Prom
  * El destino pasa las mismas reglas que una reserva nueva, así que puede
  * responder 409 si alguien tomó esa franja mientras tanto.
  */
-export function rescheduleBooking(
+export async function rescheduleBooking(
   id: string,
   customerPhone: string,
   date: string,
   time: string,
 ): Promise<Booking> {
-  return apiPost<Booking>(`/api/v1/bookings/${encodeURIComponent(id)}/reschedule`, {
-    customerPhone,
-    date,
-    time,
-  });
+  const cita = await apiPost<BookingDeLaApi>(
+    `/api/v1/bookings/${encodeURIComponent(id)}/reschedule`,
+    { customerPhone, date, time },
+  );
+  return normalizar(cita);
 }
 
 /**
@@ -65,11 +91,15 @@ export function rescheduleBooking(
  * acceso: el servidor ignora el barberId que recibe de un barbero y fuerza
  * el suyo. Mandarlo o no desde aquí no cambia lo que ve.
  */
-export function getAgenda(filtros: { date?: string; barberId?: string }): Promise<Booking[]> {
-  return apiGet<Booking[]>('/api/v1/bookings', {
+export async function getAgenda(filtros: {
+  date?: string;
+  barberId?: string;
+}): Promise<Booking[]> {
+  const citas = await apiGet<BookingDeLaApi[]>('/api/v1/bookings', {
     date: filtros.date,
     barberId: filtros.barberId,
   });
+  return citas.map(normalizar);
 }
 
 /**
