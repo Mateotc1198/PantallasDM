@@ -1,6 +1,7 @@
 import { act, screen, userEvent, waitFor } from '@testing-library/react-native';
 import { Alert, type AlertButton } from 'react-native';
 
+import AdminBarberosScreen from '../../app/admin/barberos';
 import AgendaScreen from '../../app/admin/index';
 import LoginScreen from '../../app/admin/login';
 import AdminServiciosScreen from '../../app/admin/servicios';
@@ -452,5 +453,288 @@ describe('gestión del catálogo', () => {
     await waitFor(() =>
       expect(alerta).toHaveBeenLastCalledWith('No se pudo eliminar', expect.stringMatching(/conectar/)),
     );
+  });
+});
+
+describe('gestión de barberos', () => {
+  const FOTO = 'https://ejemplo.com/camila.png';
+
+  beforeEach(() => {
+    usePathname.mockReturnValue('/admin/barberos');
+  });
+
+  async function abrirComoAdmin() {
+    await sembrarSesion(ADMIN);
+    await renderApp(<AdminBarberosScreen />);
+    await screen.findByText('Luis Gomez');
+    return userEvent.setup();
+  }
+
+  /** Abre el formulario de alta y lo rellena con una ficha válida. */
+  async function rellenarNuevo(usuario: ReturnType<typeof userEvent.setup>) {
+    await usuario.press(screen.getByRole('button', { name: 'Agregar un barbero' }));
+    await usuario.type(screen.getByLabelText('Nombre'), '  Camila Ortiz  ');
+    await usuario.type(screen.getByLabelText('Especialidad'), 'Colorimetría');
+    await usuario.type(screen.getByLabelText('Foto'), FOTO);
+  }
+
+  it('sin sesión manda al login', async () => {
+    await renderApp(<AdminBarberosScreen />);
+
+    expect(await screen.findByText('redirige:/admin/login')).toBeOnTheScreen();
+  });
+
+  it('a un barbero lo devuelve a su agenda: no gestiona la plantilla', async () => {
+    await sembrarSesion(USUARIO_BARBERO);
+    await renderApp(<AdminBarberosScreen />);
+
+    expect(await screen.findByText('redirige:/admin')).toBeOnTheScreen();
+  });
+
+  it('lista cada barbero con su especialidad', async () => {
+    await abrirComoAdmin();
+
+    expect(screen.getByText('Luis Gomez')).toBeOnTheScreen();
+    expect(screen.getByText('Especialista en fades')).toBeOnTheScreen();
+    expect(screen.getByText('Alexander Escobar')).toBeOnTheScreen();
+  });
+
+  it('sin barberos activos invita a agregar el primero', async () => {
+    barbers.getBarbers.mockResolvedValue([]);
+    await sembrarSesion(ADMIN);
+    await renderApp(<AdminBarberosScreen />);
+
+    expect(await screen.findByText(/No hay barberos activos/)).toBeOnTheScreen();
+  });
+
+  it('si la lista falla ofrece reintentar', async () => {
+    barbers.getBarbers.mockRejectedValue(new ApiError('x', 0, 'NETWORK_ERROR'));
+    await sembrarSesion(ADMIN);
+    await renderApp(<AdminBarberosScreen />);
+
+    expect(await screen.findByRole('button', { name: /reintentar/i })).toBeOnTheScreen();
+  });
+
+  it('avisa de que el barbero nuevo nace con horario', async () => {
+    const usuario = await abrirComoAdmin();
+
+    await usuario.press(screen.getByRole('button', { name: 'Agregar un barbero' }));
+
+    expect(screen.getByText(/todos los días de 9:00 a 21:00/)).toBeOnTheScreen();
+  });
+
+  it('valida antes de enviar: un nombre corto no llega al servidor', async () => {
+    const usuario = await abrirComoAdmin();
+    await usuario.press(screen.getByRole('button', { name: 'Agregar un barbero' }));
+
+    await usuario.type(screen.getByLabelText('Nombre'), 'ab');
+    await usuario.press(screen.getByRole('button', { name: 'Crear barbero' }));
+
+    expect(screen.getByText('El nombre debe tener al menos 3 caracteres.')).toBeOnTheScreen();
+    expect(barbers.createBarber).not.toHaveBeenCalled();
+  });
+
+  it('exige una especialidad', async () => {
+    const usuario = await abrirComoAdmin();
+    await usuario.press(screen.getByRole('button', { name: 'Agregar un barbero' }));
+
+    await usuario.type(screen.getByLabelText('Nombre'), 'Camila Ortiz');
+    await usuario.press(screen.getByRole('button', { name: 'Crear barbero' }));
+
+    expect(screen.getByText(/La especialidad debe tener/)).toBeOnTheScreen();
+    expect(barbers.createBarber).not.toHaveBeenCalled();
+  });
+
+  it('rechaza una foto por http: en la app publicada no se vería', async () => {
+    const usuario = await abrirComoAdmin();
+    await usuario.press(screen.getByRole('button', { name: 'Agregar un barbero' }));
+
+    await usuario.type(screen.getByLabelText('Nombre'), 'Camila Ortiz');
+    await usuario.type(screen.getByLabelText('Especialidad'), 'Colorimetría');
+    await usuario.type(screen.getByLabelText('Foto'), 'http://ejemplo.com/camila.png');
+    await usuario.press(screen.getByRole('button', { name: 'Crear barbero' }));
+
+    // El texto exacto: la ayuda del campo también menciona https.
+    expect(
+      screen.getByText('La foto debe ser una URL que empiece por https://'),
+    ).toBeOnTheScreen();
+    expect(barbers.createBarber).not.toHaveBeenCalled();
+  });
+
+  it('la vista previa de la foto aparece solo con una dirección bien formada', async () => {
+    const usuario = await abrirComoAdmin();
+    await usuario.press(screen.getByRole('button', { name: 'Agregar un barbero' }));
+
+    await usuario.type(screen.getByLabelText('Foto'), 'https');
+    expect(screen.queryByText('Así se verá la foto.')).not.toBeOnTheScreen();
+
+    await usuario.type(screen.getByLabelText('Foto'), '://ejemplo.com/camila.png');
+    expect(screen.getByText('Así se verá la foto.')).toBeOnTheScreen();
+  });
+
+  it('crea el barbero con los textos recortados y sin mandar un id', async () => {
+    barbers.createBarber.mockResolvedValue({ ...BARBERO, id: 'camila-ortiz' });
+    const usuario = await abrirComoAdmin();
+    await rellenarNuevo(usuario);
+
+    await usuario.press(screen.getByRole('button', { name: 'Crear barbero' }));
+
+    await waitFor(() =>
+      expect(barbers.createBarber).toHaveBeenCalledWith({
+        name: 'Camila Ortiz',
+        specialty: 'Colorimetría',
+        avatar: FOTO,
+      }),
+    );
+  });
+
+  it('tras crear cierra el formulario y recarga la lista', async () => {
+    barbers.createBarber.mockResolvedValue({ ...BARBERO, id: 'camila-ortiz' });
+    const usuario = await abrirComoAdmin();
+    await rellenarNuevo(usuario);
+
+    await usuario.press(screen.getByRole('button', { name: 'Crear barbero' }));
+
+    await waitFor(() => expect(barbers.getBarbers).toHaveBeenCalledTimes(2));
+    expect(screen.queryByText('Nuevo barbero')).not.toBeOnTheScreen();
+  });
+
+  it('si el servidor rechaza el nombre repetido, muestra SU mensaje y no cierra', async () => {
+    barbers.createBarber.mockRejectedValue(
+      new ApiError('Ya existe un barbero con ese nombre.', 409, 'BARBER_NAME_TAKEN'),
+    );
+    const usuario = await abrirComoAdmin();
+    await rellenarNuevo(usuario);
+
+    await usuario.press(screen.getByRole('button', { name: 'Crear barbero' }));
+
+    expect(await screen.findByText('Ya existe un barbero con ese nombre.')).toBeOnTheScreen();
+    expect(screen.getByText('Nuevo barbero')).toBeOnTheScreen();
+  });
+
+  it('sin conexión al guardar lo dice con palabras de persona', async () => {
+    barbers.createBarber.mockRejectedValue(new ApiError('x', 0, 'NETWORK_ERROR'));
+    const usuario = await abrirComoAdmin();
+    await rellenarNuevo(usuario);
+
+    await usuario.press(screen.getByRole('button', { name: 'Crear barbero' }));
+
+    expect(await screen.findByText(/No pudimos conectar/)).toBeOnTheScreen();
+  });
+
+  it('editar abre el formulario con la ficha actual y guarda por PUT', async () => {
+    barbers.updateBarber.mockResolvedValue(BARBERO);
+    const usuario = await abrirComoAdmin();
+
+    await usuario.press(screen.getByRole('button', { name: 'Editar Luis Gomez' }));
+    expect(screen.getByText('Editar barbero')).toBeOnTheScreen();
+    expect(screen.getByLabelText('Nombre')).toHaveDisplayValue('Luis Gomez');
+    expect(screen.getByLabelText('Foto')).toHaveDisplayValue('https://ejemplo.com/luis.png');
+
+    await usuario.press(screen.getByRole('button', { name: 'Guardar cambios' }));
+
+    await waitFor(() =>
+      expect(barbers.updateBarber).toHaveBeenCalledWith('luis-gomez', {
+        name: 'Luis Gomez',
+        specialty: 'Especialista en fades',
+        avatar: 'https://ejemplo.com/luis.png',
+      }),
+    );
+    expect(barbers.createBarber).not.toHaveBeenCalled();
+  });
+
+  it('al editar no promete un horario nuevo: el barbero ya tiene el suyo', async () => {
+    const usuario = await abrirComoAdmin();
+
+    await usuario.press(screen.getByRole('button', { name: 'Editar Luis Gomez' }));
+
+    expect(screen.queryByText(/todos los días de 9:00 a 21:00/)).not.toBeOnTheScreen();
+  });
+
+  it('cambiar la foto manda la URL nueva', async () => {
+    barbers.updateBarber.mockResolvedValue(BARBERO);
+    const usuario = await abrirComoAdmin();
+    await usuario.press(screen.getByRole('button', { name: 'Editar Luis Gomez' }));
+
+    await usuario.clear(screen.getByLabelText('Foto'));
+    await usuario.type(screen.getByLabelText('Foto'), FOTO);
+    await usuario.press(screen.getByRole('button', { name: 'Guardar cambios' }));
+
+    await waitFor(() =>
+      expect(barbers.updateBarber).toHaveBeenCalledWith(
+        'luis-gomez',
+        expect.objectContaining({ avatar: FOTO }),
+      ),
+    );
+  });
+
+  it('cancelar el formulario lo cierra sin enviar nada', async () => {
+    const usuario = await abrirComoAdmin();
+    await usuario.press(screen.getByRole('button', { name: 'Editar Luis Gomez' }));
+
+    await usuario.press(screen.getByRole('button', { name: 'Cancelar' }));
+
+    expect(screen.queryByText('Editar barbero')).not.toBeOnTheScreen();
+    expect(barbers.updateBarber).not.toHaveBeenCalled();
+  });
+
+  it('abrir "nuevo" después de editar empieza con el formulario en blanco', async () => {
+    const usuario = await abrirComoAdmin();
+    await usuario.press(screen.getByRole('button', { name: 'Editar Luis Gomez' }));
+    await usuario.press(screen.getByRole('button', { name: 'Cancelar' }));
+
+    await usuario.press(screen.getByRole('button', { name: 'Agregar un barbero' }));
+
+    expect(screen.getByLabelText('Nombre')).toHaveDisplayValue('');
+  });
+
+  describe('dar de baja', () => {
+    it('pide confirmación y explica qué pasa con las citas', async () => {
+      const usuario = await abrirComoAdmin();
+
+      await usuario.press(screen.getByRole('button', { name: 'Dar de baja a Luis Gomez' }));
+
+      expect(alerta).toHaveBeenCalledWith(
+        'Dar de baja',
+        expect.stringMatching(/Luis Gomez.*citas pasadas se conservan/),
+        expect.any(Array),
+      );
+      expect(barbers.deleteBarber).not.toHaveBeenCalled();
+    });
+
+    it('decir que no deja al barbero como estaba', async () => {
+      const usuario = await abrirComoAdmin();
+      await usuario.press(screen.getByRole('button', { name: 'Dar de baja a Luis Gomez' }));
+
+      await pulsarEnAlerta('No');
+
+      expect(barbers.deleteBarber).not.toHaveBeenCalled();
+    });
+
+    it('confirmar da de baja y recarga la lista', async () => {
+      barbers.deleteBarber.mockResolvedValue(undefined);
+      const usuario = await abrirComoAdmin();
+      await usuario.press(screen.getByRole('button', { name: 'Dar de baja a Luis Gomez' }));
+
+      await pulsarEnAlerta('Sí, dar de baja');
+
+      expect(barbers.deleteBarber).toHaveBeenCalledWith('luis-gomez');
+      await waitFor(() => expect(barbers.getBarbers).toHaveBeenCalledTimes(2));
+    });
+
+    it('si tiene citas pendientes enseña el motivo que da el servidor', async () => {
+      const motivo = 'El barbero tiene citas activas pendientes. Cancélalas antes de darlo de baja.';
+      barbers.deleteBarber.mockRejectedValue(new ApiError(motivo, 409, 'BARBER_HAS_BOOKINGS'));
+      const usuario = await abrirComoAdmin();
+      await usuario.press(screen.getByRole('button', { name: 'Dar de baja a Luis Gomez' }));
+
+      await pulsarEnAlerta('Sí, dar de baja');
+
+      await waitFor(() =>
+        expect(alerta).toHaveBeenLastCalledWith('No se pudo dar de baja', motivo),
+      );
+      // No se recargó: no cambió nada.
+      expect(barbers.getBarbers).toHaveBeenCalledTimes(1);
+    });
   });
 });

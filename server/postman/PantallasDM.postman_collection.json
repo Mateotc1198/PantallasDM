@@ -1664,6 +1664,378 @@
           "response": []
         }
       ]
+    },
+    {
+      "name": "Gestión de barberos",
+      "item": [
+        {
+          "name": "34. Crear barbero (admin)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenAdmin}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Barbero De Postman\",\n  \"specialty\": \"Creado por la colección para probar el panel.\",\n  \"avatar\": \"https://i.pravatar.cc/240?img=8\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/barbers",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "barbers"
+              ]
+            },
+            "description": "Solo el administrador. El id lo deriva el servidor del nombre y el barbero nace con horario, listo para recibir reservas."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201 Created', () => pm.response.to.have.status(201));",
+                  "",
+                  "pm.test('devuelve la cabecera Location', () => {",
+                  "    pm.expect(pm.response.headers.get('Location')).to.include('/api/v1/barbers/');",
+                  "});",
+                  "",
+                  "pm.test('el id sale del nombre', () => {",
+                  "    pm.expect(pm.response.json().id).to.match(/^barbero-de-postman/);",
+                  "});",
+                  "",
+                  "pm.test('nace sin reseñas', () => {",
+                  "    pm.expect(pm.response.json().reviewsCount).to.eql(0);",
+                  "});",
+                  "",
+                  "pm.environment.set('barberoNuevoId', pm.response.json().id);"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "35. Crear barbero repetido (409)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenAdmin}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Barbero De Postman\",\n  \"specialty\": \"Creado por la colección para probar el panel.\",\n  \"avatar\": \"https://i.pravatar.cc/240?img=8\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/barbers",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "barbers"
+              ]
+            },
+            "description": "Dos barberos activos no pueden llamarse igual."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('409 Conflict', () => pm.response.to.have.status(409));",
+                  "pm.test('codigo BARBER_NAME_TAKEN', () => {",
+                  "    pm.expect(pm.response.json().error.code).to.eql('BARBER_NAME_TAKEN');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "36. Crear barbero sin token (401)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Barbero De Postman\",\n  \"specialty\": \"Creado por la colección para probar el panel.\",\n  \"avatar\": \"https://i.pravatar.cc/240?img=8\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/barbers",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "barbers"
+              ]
+            },
+            "description": "Sin sesión no se toca la plantilla."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('401 Unauthorized', () => pm.response.to.have.status(401));",
+                  "pm.test('codigo UNAUTHORIZED', () => {",
+                  "    pm.expect(pm.response.json().error.code).to.eql('UNAUTHORIZED');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "37. Crear barbero como barbero (403)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenBarbero}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Barbero De Postman\",\n  \"specialty\": \"Creado por la colección para probar el panel.\",\n  \"avatar\": \"https://i.pravatar.cc/240?img=8\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/barbers",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "barbers"
+              ]
+            },
+            "description": "Sesión válida, rol insuficiente: un barbero no decide quién más trabaja en el local."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('403 Forbidden', () => pm.response.to.have.status(403));",
+                  "pm.test('codigo FORBIDDEN', () => {",
+                  "    pm.expect(pm.response.json().error.code).to.eql('FORBIDDEN');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "38. Crear barbero con foto sin https (400)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenAdmin}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Foto Insegura\",\n  \"specialty\": \"No debería crearse.\",\n  \"avatar\": \"http://ejemplo.com/foto.png\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/barbers",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "barbers"
+              ]
+            },
+            "description": "La foto debe ser una URL https: Android no carga imágenes por http en una app publicada."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400 Bad Request', () => pm.response.to.have.status(400));",
+                  "pm.test('codigo VALIDATION_ERROR', () => {",
+                  "    pm.expect(pm.response.json().error.code).to.eql('VALIDATION_ERROR');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "39. Editar barbero (admin)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenAdmin}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Barbero De Postman\",\n  \"specialty\": \"Especialidad editada desde la colección.\",\n  \"avatar\": \"https://i.pravatar.cc/240?img=9\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/barbers/{{barberoNuevoId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "barbers",
+                "{{barberoNuevoId}}"
+              ]
+            },
+            "description": "Reemplazo completo de la ficha. El id no cambia aunque cambie el nombre."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "",
+                  "pm.test('guarda la especialidad nueva', () => {",
+                  "    pm.expect(pm.response.json().specialty).to.eql('Especialidad editada desde la colección.');",
+                  "});",
+                  "",
+                  "pm.test('conserva el id', () => {",
+                  "    pm.expect(pm.response.json().id).to.eql(pm.environment.get('barberoNuevoId'));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "40. Dar de baja barbero (admin)",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenAdmin}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/barbers/{{barberoNuevoId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "barbers",
+                "{{barberoNuevoId}}"
+              ]
+            },
+            "description": "Baja lógica: la fila se conserva para el historial de citas. Respondería 409 si tuviera citas activas pendientes."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('204 No Content', () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "41. Barbero dado de baja ya no existe (404)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/barbers/{{barberoNuevoId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "barbers",
+                "{{barberoNuevoId}}"
+              ]
+            },
+            "description": "Para el cliente, un barbero dado de baja simplemente no existe."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('404 Not Found', () => pm.response.to.have.status(404));",
+                  "pm.test('codigo BARBER_NOT_FOUND', () => {",
+                  "    pm.expect(pm.response.json().error.code).to.eql('BARBER_NOT_FOUND');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        }
+      ]
     }
   ]
 }

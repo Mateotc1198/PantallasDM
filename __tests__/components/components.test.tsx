@@ -395,12 +395,22 @@ describe('AdminHeader', () => {
     barberId: 'luis-gomez',
   };
 
-  it('el administrador ve las dos pestañas', async () => {
+  it('el administrador ve las tres pestañas', async () => {
     await renderApp(<AdminHeader user={admin} onLogout={jest.fn()} />);
 
     expect(screen.getByText('Panel de administración')).toBeOnTheScreen();
     expect(screen.getByRole('radio', { name: 'Agenda' })).toBeOnTheScreen();
+    expect(screen.getByRole('radio', { name: 'Barberos' })).toBeOnTheScreen();
     expect(screen.getByRole('radio', { name: 'Servicios' })).toBeOnTheScreen();
+  });
+
+  it('la pestaña de barberos lleva a su pantalla', async () => {
+    usePathname.mockReturnValue('/admin');
+    await renderApp(<AdminHeader user={admin} onLogout={jest.fn()} />);
+
+    await userEvent.setup().press(screen.getByRole('radio', { name: 'Barberos' }));
+
+    expect(router.replace).toHaveBeenCalledWith('/admin/barberos');
   });
 
   it('el barbero no ve pestañas: solo tiene su agenda', async () => {
@@ -408,6 +418,7 @@ describe('AdminHeader', () => {
 
     expect(screen.getByText('Agenda de luis')).toBeOnTheScreen();
     expect(screen.queryByRole('radio', { name: 'Servicios' })).not.toBeOnTheScreen();
+    expect(screen.queryByRole('radio', { name: 'Barberos' })).not.toBeOnTheScreen();
     expect(screen.queryByRole('radio', { name: 'Agenda' })).not.toBeOnTheScreen();
   });
 

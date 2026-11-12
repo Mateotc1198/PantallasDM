@@ -1,6 +1,12 @@
 import * as client from '../../src/api/client';
 import { login, me } from '../../src/data/auth';
-import { getBarberById, getBarbers } from '../../src/data/barbers';
+import {
+  createBarber,
+  deleteBarber,
+  getBarberById,
+  getBarbers,
+  updateBarber,
+} from '../../src/data/barbers';
 import {
   cancelBooking,
   cancelBookingAsCustomer,
@@ -43,6 +49,38 @@ describe('barberos', () => {
     await getBarberById('a/b c');
 
     expect(api.apiGet).toHaveBeenCalledWith('/api/v1/barbers/a%2Fb%20c');
+  });
+
+  describe('gestión desde el panel', () => {
+    const ficha = {
+      name: 'Camila Ortiz',
+      specialty: 'Colorimetría.',
+      avatar: 'https://ejemplo.com/camila.png',
+    };
+
+    it('createBarber usa POST y no manda id: lo pone el servidor', async () => {
+      await createBarber(ficha);
+
+      expect(api.apiPost).toHaveBeenCalledWith('/api/v1/barbers', ficha);
+    });
+
+    it('updateBarber usa PUT con la ficha completa', async () => {
+      await updateBarber('luis-gomez', ficha);
+
+      expect(api.apiPut).toHaveBeenCalledWith('/api/v1/barbers/luis-gomez', ficha);
+    });
+
+    it('deleteBarber usa DELETE', async () => {
+      await deleteBarber('luis-gomez');
+
+      expect(api.apiDelete).toHaveBeenCalledWith('/api/v1/barbers/luis-gomez');
+    });
+
+    it('codifica el id también al escribir', async () => {
+      await deleteBarber('a/b');
+
+      expect(api.apiDelete).toHaveBeenCalledWith('/api/v1/barbers/a%2Fb');
+    });
   });
 });
 
