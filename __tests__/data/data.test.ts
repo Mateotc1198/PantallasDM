@@ -17,6 +17,7 @@ import {
 } from '../../src/data/bookings';
 import { createService, deleteService, getServices, updateService } from '../../src/data/services';
 import { getMonthAvailability, getSlots } from '../../src/data/slots';
+import { getUsers, removeBarberAccount, setBarberAccount } from '../../src/data/users';
 
 /**
  * La capa de datos es la frontera entre las pantallas y la API. Lo que se
@@ -215,5 +216,33 @@ describe('autenticación', () => {
     await me();
 
     expect(api.apiGet).toHaveBeenCalledWith('/api/v1/auth/me');
+  });
+});
+
+describe('cuentas de acceso', () => {
+  it('getUsers pide las cuentas', async () => {
+    await getUsers();
+
+    expect(api.apiGet).toHaveBeenCalledWith('/api/v1/users');
+  });
+
+  it('setBarberAccount usa PUT sobre la cuenta de ese barbero', async () => {
+    const cuenta = { username: 'luis', password: 'clave-segura-2026' };
+
+    await setBarberAccount('luis-gomez', cuenta);
+
+    expect(api.apiPut).toHaveBeenCalledWith('/api/v1/barbers/luis-gomez/account', cuenta);
+  });
+
+  it('removeBarberAccount usa DELETE sobre la cuenta, no sobre el barbero', async () => {
+    await removeBarberAccount('luis-gomez');
+
+    expect(api.apiDelete).toHaveBeenCalledWith('/api/v1/barbers/luis-gomez/account');
+  });
+
+  it('codifica el id del barbero', async () => {
+    await removeBarberAccount('a/b');
+
+    expect(api.apiDelete).toHaveBeenCalledWith('/api/v1/barbers/a%2Fb/account');
   });
 });

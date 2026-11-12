@@ -9,12 +9,14 @@ import DatosScreen from '../../app/reserva/datos';
 import FechaScreen from '../../app/reserva/fecha';
 import HoraScreen from '../../app/reserva/hora';
 import PerfilScreen from '../../app/reserva/perfil';
+import ServicioScreen from '../../app/reserva/servicio';
 import { ApiError } from '../../src/api/client';
 import * as barbersData from '../../src/data/barbers';
 import * as bookingsData from '../../src/data/bookings';
+import * as servicesData from '../../src/data/services';
 import * as slotsData from '../../src/data/slots';
 import { reiniciarDobles } from '../helpers/dobles';
-import { BARBERO, CITA, OTRO_BARBERO, renderConReserva } from '../helpers/estado';
+import { BARBERO, CITA, OTRO_BARBERO, renderConReserva, SERVICIO } from '../helpers/estado';
 import { renderApp } from '../helpers/render';
 import { reiniciarRouter, router } from '../helpers/router';
 
@@ -28,10 +30,12 @@ import { reiniciarRouter, router } from '../helpers/router';
 jest.mock('expo-router', () => require('../helpers/router').expoRouterMock);
 jest.mock('../../src/data/barbers');
 jest.mock('../../src/data/bookings');
+jest.mock('../../src/data/services');
 jest.mock('../../src/data/slots');
 
 const barbers = jest.mocked(barbersData);
 const bookings = jest.mocked(bookingsData);
+const services = jest.mocked(servicesData);
 const slots = jest.mocked(slotsData);
 
 /**
@@ -41,7 +45,7 @@ const slots = jest.mocked(slotsData);
  */
 beforeEach(() => {
   reiniciarRouter();
-  reiniciarDobles(barbers, bookings, slots);
+  reiniciarDobles(barbers, bookings, services, slots);
   jest.restoreAllMocks();
 });
 
@@ -146,13 +150,13 @@ describe('paso 2: perfil', () => {
     expect(screen.getByRole('button', { name: 'Continuar' })).toBeEnabled();
   });
 
-  it('"Continuar" avanza a la fecha', async () => {
+  it('"Continuar" avanza a elegir el servicio', async () => {
     barbers.getBarberById.mockResolvedValue(conResenas);
     await renderConReserva(<PerfilScreen />, { barber: BARBERO });
 
     await userEvent.setup().press(screen.getByRole('button', { name: 'Continuar' }));
 
-    expect(router.push).toHaveBeenCalledWith('/reserva/fecha');
+    expect(router.push).toHaveBeenCalledWith('/reserva/servicio');
   });
 
   it('sin barbero elegido devuelve al paso 1', async () => {
@@ -162,7 +166,7 @@ describe('paso 2: perfil', () => {
   });
 });
 
-describe('paso 3: fecha', () => {
+describe('paso 4: fecha', () => {
   beforeEach(() => {
     // Cada mes pedido tiene cupo solo el día 15.
     slots.getMonthAvailability.mockImplementation(async (_barbero, mes) => ({
@@ -223,7 +227,7 @@ describe('paso 3: fecha', () => {
   });
 });
 
-describe('paso 4: hora', () => {
+describe('paso 5: hora', () => {
   const estado = { barber: BARBERO, date: '2026-12-01' };
 
   it('pinta las franjas y elegir una libre avanza a los datos', async () => {
@@ -268,7 +272,7 @@ describe('paso 4: hora', () => {
   });
 });
 
-describe('paso 5: datos', () => {
+describe('paso 6: datos', () => {
   const estado = { barber: BARBERO, date: '2026-12-01', time: '10:00' };
 
   async function rellenar(nombre: string, telefono: string) {
@@ -308,6 +312,8 @@ describe('paso 5: datos', () => {
       // Sin los espacios de los extremos.
       customerName: 'Cliente Prueba',
       customerPhone: '3000000000',
+      // Del servicio viaja solo el id: el precio lo pone el servidor.
+      serviceId: 's1',
     });
     expect(router.replace).toHaveBeenCalledWith('/reserva/confirmada');
   });
@@ -416,5 +422,104 @@ describe('confirmación', () => {
 
     expect(screen.queryByText('Cita confirmada')).not.toBeOnTheScreen();
     expect(router.replace).toHaveBeenCalledWith('/reserva/barbero');
+  });
+});
+
+describe('paso 3: servicio', () => {
+  const BARBA: typeof SERVICIO = {
+    id: 's2',
+    name: 'Arreglo de barba',
+    description: '',
+    priceCop: 20000,
+    category: 'Barba',
+    imageUrl: null,
+  };
+
+  beforeEach(() => {
+    // La API los devuelve ya ordenados por categoría y nombre.
+    services.getServices.mockResolvedValue([BARBA, SERVICIO]);
+  });
+
+  it('lista el catálogo agrupado por categoría, con el precio de cada servicio', async () => {
+    await renderConReserva(<ServicioScreen />, { barber: BARBERO, service: null });
+
+    expect(await screen.findByText('Fade')).toBeOnTheScreen();
+    expect(screen.getByText('Barba')).toBeOnTheScreen();
+    expect(screen.getByText('Cortes')).toBeOnTheScreen();
+    expect(screen.getByText(/30\.000/)).toBeOnTheScreen();
+    expect(screen.getByText(/20\.000/)).toBeOnTheScreen();
+  });
+
+  it('elegir un servicio lo guarda y avanza a la fecha', async () => {
+    await renderConReserva(<ServicioScreen />, { barber: BARBERO, service: null });
+
+    await userEvent.setup().press(await screen.findByRole('button', { name: /Elegir Fade/ }));
+
+    expect(router.push).toHaveBeenCalledWith('/reserva/fecha');
+  });
+
+  it('recuerda con qué barbero se está reservando y deja cambiarlo', async () => {
+    await renderConReserva(<ServicioScreen />, { barber: BARBERO, service: null });
+
+    expect(await screen.findByText('Luis Gomez')).toBeOnTheScreen();
+  });
+
+  it('un catálogo vacío se explica en vez de dejar la pantalla en blanco', async () => {
+    services.getServices.mockResolvedValue([]);
+    await renderConReserva(<ServicioScreen />, { barber: BARBERO, service: null });
+
+    expect(await screen.findByText('Todavía no hay servicios publicados.')).toBeOnTheScreen();
+  });
+
+  it('si el catálogo falla ofrece reintentar, y reintentar vuelve a pedir', async () => {
+    services.getServices.mockRejectedValueOnce(new ApiError('x', 0, 'NETWORK_ERROR'));
+    await renderConReserva(<ServicioScreen />, { barber: BARBERO, service: null });
+
+    await userEvent.setup().press(await screen.findByRole('button', { name: 'Reintentar' }));
+
+    expect(await screen.findByText('Fade')).toBeOnTheScreen();
+    expect(services.getServices).toHaveBeenCalledTimes(2);
+  });
+
+  it('sin barbero elegido devuelve al paso 1', async () => {
+    await renderConReserva(<ServicioScreen />, {});
+
+    expect(router.replace).toHaveBeenCalledWith('/reserva/barbero');
+  });
+});
+
+describe('el servicio a lo largo del flujo', () => {
+  it('sin servicio elegido, la fecha devuelve al paso 1', async () => {
+    await renderConReserva(<FechaScreen />, { barber: BARBERO, service: null });
+
+    expect(router.replace).toHaveBeenCalledWith('/reserva/barbero');
+  });
+
+  it('el resumen antes de confirmar dice el servicio y su precio', async () => {
+    await renderConReserva(<DatosScreen />, {
+      barber: BARBERO,
+      date: '2026-12-01',
+      time: '10:00',
+    });
+
+    expect(await screen.findByText('Fade')).toBeOnTheScreen();
+    expect(screen.getByText(/30\.000/)).toBeOnTheScreen();
+  });
+
+  it('la confirmación muestra el servicio que registró el servidor', async () => {
+    await renderConReserva(<ConfirmadaScreen />, { barber: BARBERO, booking: CITA });
+
+    expect(await screen.findByText('Fade')).toBeOnTheScreen();
+    expect(screen.getByText(/30\.000/)).toBeOnTheScreen();
+  });
+
+  it('una cita antigua sin servicio se muestra sin esas dos filas', async () => {
+    await renderConReserva(<ConfirmadaScreen />, {
+      barber: BARBERO,
+      booking: { ...CITA, service: null },
+    });
+
+    expect(await screen.findByText('Cita confirmada')).toBeOnTheScreen();
+    expect(screen.queryByText('Servicio')).not.toBeOnTheScreen();
   });
 });

@@ -112,6 +112,57 @@ describe('useAsync', () => {
     await waitFor(() => expect(result.current.data).toBe('intento 2'));
   });
 
+  it('recargar con datos en pantalla es "refreshing": los datos no desaparecen', async () => {
+    const segunda = diferida<string>();
+    const cargar = jest
+      .fn<Promise<string>, []>()
+      .mockResolvedValueOnce('primera')
+      .mockReturnValueOnce(segunda.promesa);
+    const { result } = await renderHook(() => useAsync(cargar, []));
+    await waitFor(() => expect(result.current.data).toBe('primera'));
+    expect(result.current.refreshing).toBe(false);
+
+    await act(async () => {
+      result.current.reload();
+    });
+
+    // Sigue enseñando lo anterior mientras llega lo nuevo.
+    expect(result.current.refreshing).toBe(true);
+    expect(result.current.data).toBe('primera');
+
+    await act(async () => {
+      segunda.resolver('segunda');
+    });
+
+    expect(result.current.refreshing).toBe(false);
+    expect(result.current.data).toBe('segunda');
+  });
+
+  it('la primera carga no es "refreshing": no hay nada que conservar', async () => {
+    const carga = diferida<string>();
+    const { result } = await renderHook(() => useAsync(() => carga.promesa, []));
+
+    expect(result.current.loading).toBe(true);
+    expect(result.current.refreshing).toBe(false);
+  });
+
+  it('reintentar tras un error tampoco es "refreshing"', async () => {
+    const segunda = diferida<string>();
+    const cargar = jest
+      .fn<Promise<string>, []>()
+      .mockRejectedValueOnce(new ApiError('caído', 500, 'INTERNAL_ERROR'))
+      .mockReturnValueOnce(segunda.promesa);
+    const { result } = await renderHook(() => useAsync(cargar, []));
+    await waitFor(() => expect(result.current.error).not.toBeNull());
+
+    await act(async () => {
+      result.current.reload();
+    });
+
+    expect(result.current.loading).toBe(true);
+    expect(result.current.refreshing).toBe(false);
+  });
+
   it('tras un error, reload limpia el error al reintentar con éxito', async () => {
     const cargar = jest
       .fn<Promise<string>, []>()

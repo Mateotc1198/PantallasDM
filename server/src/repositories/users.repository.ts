@@ -62,6 +62,82 @@ export async function findCredentialsByUsername(
   return { user: toAuthUser(row), passwordHash: row.password_hash };
 }
 
+/** Código de Postgres para violación de restricción UNIQUE. */
+const UNIQUE_VIOLATION = '23505';
+
+/** El repositorio cuenta qué pasó; el servicio decide que eso es un 409. */
+export type AccountResult = { ok: true; user: AuthUser } | { ok: false; reason: 'username_taken' };
+
+/**
+ * Todas las cuentas vigentes, sin hash.
+ *
+ * Las de barberos dados de baja no aparecen: no pueden iniciar sesión, así
+ * que para el panel no existen.
+ */
+export async function findAll(): Promise<AuthUser[]> {
+  const rows = await query<UserRow>(
+    `SELECT u.id, u.username, u.role, u.barber_id
+     FROM users u
+     LEFT JOIN barbers b ON b.id = u.barber_id
+     WHERE u.barber_id IS NULL OR b.deleted_at IS NULL
+     ORDER BY u.role, u.username`,
+  );
+  return rows.map(toAuthUser);
+}
+
+/**
+ * Crea la cuenta de un barbero o reemplaza la que ya tenía.
+ *
+ * El conflicto que se resuelve actualizando es el de barber_id (un barbero,
+ * una cuenta), NUNCA el de username. Esa diferencia es de seguridad: con
+ * ON CONFLICT (username) DO UPDATE, pedir el usuario "admin" para un barbero
+ * convertiría la cuenta del administrador en una de barbero y lo dejaría
+ * fuera del panel. Aquí un usuario repetido choca contra su índice único y se
+ * devuelve como rechazo.
+ *
+ * El rol va escrito en la consulta y no llega como parámetro: por esta
+ * función no se puede crear un administrador.
+ */
+export async function setBarberAccount(
+  barberId: string,
+  username: string,
+  passwordHash: string,
+): Promise<AccountResult> {
+  try {
+    const rows = await query<UserRow>(
+      `INSERT INTO users (username, password_hash, role, barber_id)
+       VALUES ($1, $2, 'barbero', $3)
+       ON CONFLICT (barber_id) WHERE barber_id IS NOT NULL DO UPDATE
+         SET username      = EXCLUDED.username,
+             password_hash = EXCLUDED.password_hash
+       RETURNING id, username, role, barber_id`,
+      [username, passwordHash, barberId],
+    );
+
+    const row = rows[0];
+    if (row === undefined) {
+      throw new Error('Guardar la cuenta del barbero no devolvió ninguna fila.');
+    }
+    return { ok: true, user: toAuthUser(row) };
+  } catch (error) {
+    const code =
+      typeof error === 'object' && error !== null ? (error as { code?: unknown }).code : undefined;
+    if (code === UNIQUE_VIOLATION) {
+      return { ok: false, reason: 'username_taken' };
+    }
+    throw error;
+  }
+}
+
+/** Borra la cuenta de un barbero. false si no tenía ninguna. */
+export async function deleteByBarber(barberId: string): Promise<boolean> {
+  const rows = await query<{ id: string }>(
+    'DELETE FROM users WHERE barber_id = $1 RETURNING id',
+    [barberId],
+  );
+  return rows.length > 0;
+}
+
 export async function findById(id: string): Promise<AuthUser | null> {
   const rows = await query<UserRow>(
     'SELECT id, username, role, barber_id FROM users WHERE id = $1',

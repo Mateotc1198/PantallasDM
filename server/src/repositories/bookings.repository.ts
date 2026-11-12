@@ -1,5 +1,10 @@
 import { query } from '../config/database.js';
-import type { Booking, BookingStatus, CreateBookingInput } from '../types/api.js';
+import type {
+  Booking,
+  BookingService,
+  BookingStatus,
+  CreateBookingInput,
+} from '../types/api.js';
 import { normalizeTime } from '../utils/time.js';
 
 /** Código de Postgres para violación de restricción UNIQUE. */
@@ -14,6 +19,9 @@ interface BookingRow {
   customer_phone: string;
   status: BookingStatus;
   created_at: Date;
+  service_id: string | null;
+  service_name: string | null;
+  service_price_cop: number | null;
 }
 
 /**
@@ -25,7 +33,19 @@ interface BookingRow {
  */
 export type CreateResult =
   | { ok: true; booking: Booking }
-  | { ok: false; reason: 'slot_taken' };
+  | { ok: false; reason: 'slot_taken' | 'service_not_found' };
+
+/**
+ * La cita tiene servicio si guardó su nombre. No se mira service_id: ese
+ * pasa a NULL cuando el servicio se borra del catálogo, y la cita sigue
+ * teniendo el suyo.
+ */
+function toBookingService(row: BookingRow): BookingService | null {
+  if (row.service_name === null || row.service_price_cop === null) {
+    return null;
+  }
+  return { id: row.service_id, name: row.service_name, priceCop: row.service_price_cop };
+}
 
 function toBooking(row: BookingRow): Booking {
   return {
@@ -36,13 +56,43 @@ function toBooking(row: BookingRow): Booking {
     customerName: row.customer_name,
     customerPhone: row.customer_phone,
     status: row.status,
+    service: toBookingService(row),
     createdAt: row.created_at.toISOString(),
   };
 }
 
 const RETURNING_COLUMNS = `
   id, barber_id, booking_date, booking_time,
-  customer_name, customer_phone, status, created_at
+  customer_name, customer_phone, status, created_at,
+  service_id, service_name, service_price_cop
+`;
+
+/** Cita sin servicio: un INSERT de valores, como siempre. */
+const INSERT_SIN_SERVICIO = `
+  INSERT INTO bookings (barber_id, booking_date, booking_time, customer_name, customer_phone)
+  VALUES ($1, $2, $3, $4, $5)
+  RETURNING ${RETURNING_COLUMNS}
+`;
+
+/**
+ * Cita con servicio: el INSERT lee el catálogo en la misma sentencia.
+ *
+ * Copia nombre y precio directamente de services, así que el precio no puede
+ * venir del cliente ni quedar desfasado entre una consulta y la siguiente. Y
+ * si el servicio no existe, el SELECT no produce fila y no se inserta nada:
+ * comprobar que existe e insertar son un solo paso.
+ *
+ * Los casts son necesarios: en un INSERT ... SELECT Postgres no deduce el
+ * tipo de los parámetros a partir de las columnas de destino.
+ */
+const INSERT_CON_SERVICIO = `
+  INSERT INTO bookings
+    (barber_id, booking_date, booking_time, customer_name, customer_phone,
+     service_id, service_name, service_price_cop)
+  SELECT $1::text, $2::date, $3::time, $4::text, $5::text, s.id, s.name, s.price_cop
+  FROM services s
+  WHERE s.id = $6::uuid
+  RETURNING ${RETURNING_COLUMNS}
 `;
 
 /** Error del driver de Postgres, acotado a lo que necesitamos leer. */
@@ -64,16 +114,23 @@ function isUniqueViolation(error: unknown): boolean {
  * Postgres responde 23505 y lo traducimos a un resultado de negocio.
  */
 export async function create(input: CreateBookingInput): Promise<CreateResult> {
+  const datos = [input.barberId, input.date, input.time, input.customerName, input.customerPhone];
+  const serviceId = input.serviceId ?? null;
+
   try {
-    const rows = await query<BookingRow>(
-      `INSERT INTO bookings (barber_id, booking_date, booking_time, customer_name, customer_phone)
-       VALUES ($1, $2, $3, $4, $5)
-       RETURNING ${RETURNING_COLUMNS}`,
-      [input.barberId, input.date, input.time, input.customerName, input.customerPhone],
-    );
+    const rows =
+      serviceId === null
+        ? await query<BookingRow>(INSERT_SIN_SERVICIO, datos)
+        : await query<BookingRow>(INSERT_CON_SERVICIO, [...datos, serviceId]);
 
     const row = rows[0];
     if (row === undefined) {
+      // Con servicio, cero filas significa que ese servicio no existe. Sin
+      // servicio un INSERT de valores siempre devuelve su fila: no llegar
+      // aquí con una sería un fallo del driver, no de la petición.
+      if (serviceId !== null) {
+        return { ok: false, reason: 'service_not_found' };
+      }
       throw new Error('El INSERT de bookings no devolvió ninguna fila.');
     }
     return { ok: true, booking: toBooking(row) };

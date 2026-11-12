@@ -229,6 +229,9 @@ Todos bajo `/api/v1`.
 | 18 | `POST` | `/barbers` | **admin** | Crear barbero |
 | 19 | `PUT` | `/barbers/:id` | **admin** | Editar ficha y foto |
 | 20 | `DELETE` | `/barbers/:id` | **admin** | Dar de baja |
+| 21 | `PUT` | `/barbers/:id/account` | **admin** | Dar o cambiar el acceso al panel |
+| 22 | `DELETE` | `/barbers/:id/account` | **admin** | Quitar el acceso al panel |
+| 23 | `GET` | `/users` | **admin** | Cuentas de acceso existentes |
 
 Fuera del contrato de negocio: `GET /health`, sonda de infraestructura.
 
@@ -238,7 +241,7 @@ Fuera del contrato de negocio: `GET /health`, sonda de infraestructura.
 | --- | --- |
 | Público (sin cuenta) | Ver barberos y disponibilidad, **reservar**, consultar su cita por el id |
 | `barbero` | Todo lo anterior, más ver y cancelar **sus propias** citas |
-| `admin` | Todo lo anterior, sobre **todas** las citas. Además gestiona el catálogo de servicios y la plantilla de barberos |
+| `admin` | Todo lo anterior, sobre **todas** las citas. Además gestiona el catálogo de servicios, la plantilla de barberos y sus cuentas de acceso |
 
 Reservar es público a propósito: el cliente no necesita cuenta, igual que en el
 diseño. Consultar una cita por su id también, porque es el recibo del cliente y
@@ -272,6 +275,9 @@ petición para que un filtro de interfaz deje de proteger nada.
 | `POST /barbers` | `201` + `Location` | `400` `401` `403` `409` `500` |
 | `PUT /barbers/:id` | `200` | `400` `401` `403` `404` `409` `500` |
 | `DELETE /barbers/:id` | `204` | `401` `403` `404` `409` `500` |
+| `PUT /barbers/:id/account` | `200` | `400` `401` `403` `404` `409` `500` |
+| `DELETE /barbers/:id/account` | `204` | `401` `403` `404` `500` |
+| `GET /users` | `200` | `401` `403` `500` |
 
 ### El catálogo de servicios
 
@@ -325,6 +331,43 @@ administrador las cancela primero desde la agenda. La comprobación va dentro
 del mismo `UPDATE` que da la baja, no en una consulta previa.
 
 Los horarios **no** se editan desde el panel: los gobierna el seed.
+
+### El servicio de la cita
+
+`POST /bookings` acepta un `serviceId` opcional, y toda cita devuelve
+`service` con `id`, `name` y `priceCop` (o `null` si se reservó sin servicio).
+
+El nombre y el precio se guardan **como una foto** del servicio en el momento de
+reservar, no como un enlace al catálogo. Es lo que el cliente aceptó pagar: si
+el administrador sube el precio o elimina el servicio, la cita sigue diciendo lo
+que se acordó. Al eliminar un servicio, `service.id` pasa a `null` y la cita
+conserva nombre y precio.
+
+El precio **nunca viene del cliente**: del servicio solo viaja el id, y el
+`INSERT` copia nombre y precio de la tabla `services` en la misma sentencia. Esa
+sentencia tampoco inserta nada si el servicio no existe (`404 SERVICE_NOT_FOUND`).
+
+`serviceId` es opcional para no romperle la reserva a quien tenga instalada una
+versión anterior de la app.
+
+### Las cuentas de los barberos
+
+El administrador le pone usuario y contraseña a cada barbero con
+`PUT /barbers/:id/account`. Un barbero tiene como mucho una cuenta; repetir la
+llamada reemplaza usuario y contraseña.
+
+| Decisión | Por qué |
+| --- | --- |
+| Un usuario repetido es `409`, nunca un reemplazo | Si reemplazara, pedir el usuario `admin` para un barbero convertiría la cuenta del administrador en una de barbero. El conflicto que sí se resuelve actualizando es el de `barber_id`, no el de `username`. |
+| El rol va escrito en la consulta | Por este endpoint no se puede crear un administrador, se mande lo que se mande en el cuerpo. |
+| Contraseña de 8 a 72 caracteres | bcrypt ignora en silencio todo lo que pase de 72 bytes: aceptar más sería prometer una seguridad que no se da. |
+| Ninguna respuesta lleva la contraseña ni su hash | El tipo que devuelve la API no los contiene. |
+
+El script de cuentas iniciales (`users:seed`) sigue creando la cuenta de barbero
+de las variables de entorno, pero **solo si no existe**: desde que el panel
+gestiona las cuentas, lo que el administrador haya puesto ahí manda. La del
+administrador sí se actualiza en cada arranque: es la única forma de cambiar su
+contraseña.
 
 ### El cliente no tiene cuenta
 
@@ -489,7 +532,7 @@ La colección se ejecuta entera de corrido con el Collection Runner:
   peticiones siguientes lo reutilizan: no hay que copiar ids a mano.
 - El login **guarda el token** en una variable y las peticiones protegidas lo
   usan como `Bearer`. Tampoco hay que copiar tokens a mano.
-- Las 41 peticiones llevan tests que verifican código HTTP y forma de respuesta.
+- Las 46 peticiones llevan tests que verifican código HTTP y forma de respuesta.
 
 El environment se versiona con las **contraseñas vacías**: una contraseña
 commiteada es una contraseña publicada. Rellena `adminPassword` y
@@ -513,7 +556,7 @@ npm test
 
 - **Unitarios** (`tests/unit/`): la lógica pura de horarios y de identificadores.
   Sin base de datos.
-- **Integración** (`tests/integration/`): los 20 endpoints contra PostgreSQL real
+- **Integración** (`tests/integration/`): los 23 endpoints contra PostgreSQL real
   con supertest.
 
 Corren contra `pantallasdm_test`, una base distinta de la de desarrollo: los

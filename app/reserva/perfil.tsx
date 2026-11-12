@@ -72,7 +72,7 @@ export default function PerfilScreen() {
   );
 
   const goToDate = useCallback(() => {
-    router.push('/reserva/fecha');
+    router.push('/reserva/servicio');
   }, [router]);
 
   if (!ready || barber === null) {

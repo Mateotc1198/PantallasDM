@@ -78,6 +78,20 @@ export interface MonthAvailability {
   days: string[];
 }
 
+/**
+ * El servicio de una cita, tal como era al reservar.
+ *
+ * Es una foto, no un enlace: nombre y precio son los que el cliente aceptó.
+ * Editar o eliminar el servicio en el catálogo no cambia esto.
+ */
+export interface BookingService {
+  /** Id en el catálogo actual. null si el servicio se eliminó después. */
+  id: string | null;
+  name: string;
+  /** Pesos colombianos, entero. El precio vigente al reservar. */
+  priceCop: number;
+}
+
 /** Cita. POST /bookings, GET /bookings/:id */
 export interface Booking {
   id: string;
@@ -90,12 +104,27 @@ export interface Booking {
   /** Exactamente 10 dígitos, sin separadores. */
   customerPhone: string;
   status: BookingStatus;
+  /** null en las citas reservadas sin elegir servicio. */
+  service: BookingService | null;
   /** ISO 8601, generado por el servidor. */
   createdAt: string;
 }
 
-/** Cuerpo de POST /bookings: id, status y createdAt los pone el servidor. */
-export type CreateBookingInput = Omit<Booking, 'id' | 'status' | 'createdAt'>;
+/**
+ * Cuerpo de POST /bookings.
+ *
+ * Del servicio solo viaja el id: el nombre y el precio los copia el servidor
+ * del catálogo. Si el cliente mandara el precio, podría mandar el que quisiera.
+ */
+export interface CreateBookingInput {
+  barberId: string;
+  date: string;
+  time: string;
+  customerName: string;
+  customerPhone: string;
+  /** Opcional: la app siempre lo manda, pero la API admite citas sin servicio. */
+  serviceId?: string | null;
+}
 
 /**
  * Servicio del catalogo. GET /services

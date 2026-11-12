@@ -27,7 +27,17 @@ export interface AsyncState<T> {
   loading: boolean;
   /** La carga lleva más de SLOW_AFTER_MS en curso. */
   slow: boolean;
-  /** Vuelve a ejecutar la carga. Es lo que usa el botón de reintentar. */
+  /**
+   * Hay una recarga pedida con reload() sobre datos que ya se estaban
+   * mostrando. Es lo que alimenta el gesto de "deslizar para recargar": la
+   * lista se queda donde está con su indicador encima, en vez de vaciarse y
+   * enseñar la pantalla de carga completa.
+   *
+   * Un cambio de dependencias (otro día, otro barbero) no es una recarga: ahí
+   * lo que había en pantalla ya no corresponde a lo que se pidió.
+   */
+  refreshing: boolean;
+  /** Vuelve a ejecutar la carga: reintentar tras un error, o recargar. */
   reload: () => void;
 }
 
@@ -47,6 +57,7 @@ export function useAsync<T>(
   const [cargando, setCargando] = useState(enabled);
   const [slow, setSlow] = useState(false);
   const [intento, setIntento] = useState(0);
+  const [recargando, setRecargando] = useState(false);
 
   /**
    * La función se guarda en una ref para que quien llame no tenga que
@@ -123,6 +134,7 @@ export function useAsync<T>(
         if (vigente) {
           setCargando(false);
           setSlow(false);
+          setRecargando(false);
         }
       });
 
@@ -134,6 +146,7 @@ export function useAsync<T>(
   }, [...deps, enabled, intento]);
 
   const reload = useCallback(() => {
+    setRecargando(true);
     setIntento((anterior) => anterior + 1);
   }, []);
 
@@ -144,5 +157,16 @@ export function useAsync<T>(
    * provocaba un render en cascada para expresar algo que ya se sabe sin
    * preguntar: si no hay carga habilitada, no hay nada cargando.
    */
-  return { data, error, loading: enabled && cargando, slow, reload };
+  const loading = enabled && cargando;
+
+  return {
+    data,
+    error,
+    loading,
+    slow,
+    // Sin datos previos no hay nada que conservar en pantalla: reintentar
+    // tras un error es una carga normal, con su pantalla de carga.
+    refreshing: loading && recargando && data !== null,
+    reload,
+  };
 }

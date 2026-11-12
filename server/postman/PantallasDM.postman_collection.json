@@ -710,7 +710,10 @@
                   "",
                   "pm.test('el precio es un entero de pesos', () => {",
                   "    servicios.forEach((s) => pm.expect(Number.isInteger(s.priceCop)).to.be.true);",
-                  "});"
+                  "});",
+                  "",
+                  "// Se guarda un servicio del catálogo para reservar con él más adelante.",
+                  "pm.environment.set('servicioCatalogoId', pm.response.json()[0].id);"
                 ]
               }
             }
@@ -1009,7 +1012,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"barberId\": \"{{barberId}}\",\n  \"date\": \"{{fecha}}\",\n  \"time\": \"{{hora}}\",\n  \"customerName\": \"Mateo Torres\",\n  \"customerPhone\": \"3001112233\"\n}",
+              "raw": "{\n  \"barberId\": \"{{barberId}}\",\n  \"date\": \"{{fecha}}\",\n  \"time\": \"{{hora}}\",\n  \"customerName\": \"Mateo Torres\",\n  \"customerPhone\": \"3001112233\",\n  \"serviceId\": \"{{servicioCatalogoId}}\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -1027,7 +1030,7 @@
                 "bookings"
               ]
             },
-            "description": "201 Created con cabecera Location apuntando al recurso nuevo."
+            "description": "201 Created con cabecera Location apuntando al recurso nuevo. Lleva el servicio elegido: el servidor copia su nombre y su precio en la cita."
           },
           "event": [
             {
@@ -1065,7 +1068,13 @@
                   "});",
                   "",
                   "// Encadena: las peticiones siguientes usan este id sin copiarlo a mano.",
-                  "pm.environment.set('bookingId', cita.id);"
+                  "pm.environment.set('bookingId', cita.id);",
+                  "",
+                  "pm.test('la cita guarda el servicio con su precio', () => {",
+                  "    const servicio = pm.response.json().service;",
+                  "    pm.expect(servicio.id).to.eql(pm.environment.get('servicioCatalogoId'));",
+                  "    pm.expect(servicio.priceCop).to.be.a('number');",
+                  "});"
                 ]
               }
             }
@@ -1964,7 +1973,256 @@
           "response": []
         },
         {
-          "name": "40. Dar de baja barbero (admin)",
+          "name": "40. Dar acceso al panel (admin)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenAdmin}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"{{usuarioNuevo}}\",\n  \"password\": \"{{claveNueva}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/barbers/{{barberoNuevoId}}/account",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "barbers",
+                "{{barberoNuevoId}}",
+                "account"
+              ]
+            },
+            "description": "El administrador le pone usuario y contraseña al barbero. El usuario y la contraseña se generan en cada ejecución: no hay ninguna credencial escrita en la colección."
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Credenciales de usar y tirar: la cuenta se borra unas peticiones después.",
+                  "pm.environment.set('usuarioNuevo', 'postman-' + Date.now());",
+                  "pm.environment.set('claveNueva', pm.variables.replaceIn('{{$guid}}'));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "",
+                  "pm.test('la cuenta es de rol barbero y de ese barbero', () => {",
+                  "    const cuenta = pm.response.json();",
+                  "    pm.expect(cuenta.role).to.eql('barbero');",
+                  "    pm.expect(cuenta.barberId).to.eql(pm.environment.get('barberoNuevoId'));",
+                  "});",
+                  "",
+                  "pm.test('la respuesta no lleva la contraseña', () => {",
+                  "    pm.expect(pm.response.text()).to.not.include(pm.environment.get('claveNueva'));",
+                  "    pm.expect(pm.response.json()).to.not.have.property('password_hash');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "41. Iniciar sesión con la cuenta nueva",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"{{usuarioNuevo}}\",\n  \"password\": \"{{claveNueva}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "login"
+              ]
+            },
+            "description": "La cuenta recién creada entra al panel, ligada a su ficha de barbero."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "",
+                  "pm.test('entra como barbero de su propia ficha', () => {",
+                  "    const usuario = pm.response.json().user;",
+                  "    pm.expect(usuario.role).to.eql('barbero');",
+                  "    pm.expect(usuario.barberId).to.eql(pm.environment.get('barberoNuevoId'));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "42. Dar acceso con el usuario del admin (409)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenAdmin}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"{{adminUsername}}\",\n  \"password\": \"{{claveNueva}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/barbers/{{barberoNuevoId}}/account",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "barbers",
+                "{{barberoNuevoId}}",
+                "account"
+              ]
+            },
+            "description": "Un usuario repetido se rechaza, nunca se reemplaza: si no, bastaría pedir el usuario del administrador para quedarse con su cuenta."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('409 Conflict', () => pm.response.to.have.status(409));",
+                  "pm.test('codigo USERNAME_TAKEN', () => {",
+                  "    pm.expect(pm.response.json().error.code).to.eql('USERNAME_TAKEN');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "43. Listar cuentas (admin)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenAdmin}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/users",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "users"
+              ]
+            },
+            "description": "Solo el administrador. Ninguna cuenta lleva datos de la contraseña."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "",
+                  "pm.test('aparece la cuenta nueva', () => {",
+                  "    const usuarios = pm.response.json().map((cuenta) => cuenta.username);",
+                  "    pm.expect(usuarios).to.include(pm.environment.get('usuarioNuevo'));",
+                  "});",
+                  "",
+                  "pm.test('ninguna cuenta expone la contraseña', () => {",
+                  "    for (const cuenta of pm.response.json()) {",
+                  "        pm.expect(cuenta).to.have.all.keys('id', 'username', 'role', 'barberId');",
+                  "    }",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "44. Quitar el acceso (admin)",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenAdmin}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/barbers/{{barberoNuevoId}}/account",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "barbers",
+                "{{barberoNuevoId}}",
+                "account"
+              ]
+            },
+            "description": "Quita la cuenta. La ficha del barbero y sus citas no se tocan."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('204 No Content', () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "45. Dar de baja barbero (admin)",
           "request": {
             "method": "DELETE",
             "header": [
@@ -2001,7 +2259,7 @@
           "response": []
         },
         {
-          "name": "41. Barbero dado de baja ya no existe (404)",
+          "name": "46. Barbero dado de baja ya no existe (404)",
           "request": {
             "method": "GET",
             "header": [],

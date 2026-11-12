@@ -1,48 +1,71 @@
 import { Redirect, useRouter } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
-import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { toApiError } from '../../src/api/client';
 import { AdminHeader } from '../../src/components/AdminHeader';
 import { BookingRow } from '../../src/components/BookingRow';
 import { Calendar } from '../../src/components/Calendar';
+import { DayNavigator } from '../../src/components/DayNavigator';
+import { EmptyState } from '../../src/components/EmptyState';
 import { ErrorState } from '../../src/components/ErrorState';
 import { FilterChip } from '../../src/components/FilterChip';
 import { LoadingState } from '../../src/components/LoadingState';
+import { StatTile } from '../../src/components/StatTile';
 import { useAuth } from '../../src/context/AuthContext';
 import { getBarbers } from '../../src/data/barbers';
 import { cancelBooking, getAgenda } from '../../src/data/bookings';
 import { useAsync } from '../../src/hooks/useAsync';
+import { useTheme } from '../../src/theme/ThemeContext';
 import { spacing, typography, type Palette } from '../../src/theme/tokens';
 import { useThemedStyles } from '../../src/theme/useThemedStyles';
 import type { Booking } from '../../src/types/api';
-import {
-  currentMonthKey,
-  formatShortDate,
-  monthKeyOf,
-  startOfToday,
-  toISODate,
-} from '../../src/utils/date';
+import { currentMonthKey, monthKeyOf, startOfToday, toISODate } from '../../src/utils/date';
+import { formatCop } from '../../src/utils/money';
 
 /** En la agenda todos los días son consultables; no se filtra por cupo. */
 const TODOS_LOS_DIAS = () => true;
 
+/** La hora de ahora como 'HH:mm', comparable con la de una cita. */
+function horaActual(): string {
+  const ahora = new Date();
+  const dos = (valor: number) => String(valor).padStart(2, '0');
+  return `${dos(ahora.getHours())}:${dos(ahora.getMinutes())}`;
+}
+
+/**
+ * ¿Ya pasó la hora de esta cita?
+ *
+ * Las fechas 'YYYY-MM-DD' y las horas 'HH:mm' se ordenan igual como texto que
+ * como tiempo, así que basta comparar cadenas.
+ */
+function yaPaso(cita: Booking, hoy: string, ahora: string): boolean {
+  if (cita.date !== hoy) {
+    return cita.date < hoy;
+  }
+  return cita.time < ahora;
+}
+
 export default function AgendaScreen() {
   const styles = useThemedStyles(makeStyles);
+  const { colors } = useTheme();
   const router = useRouter();
   const { user, restoring, logout } = useAuth();
 
   const hoy = useMemo(() => toISODate(startOfToday()), []);
   const [selectedDate, setSelectedDate] = useState(hoy);
   const [visibleMonth, setVisibleMonth] = useState(() => currentMonthKey());
+  const [calendarioAbierto, setCalendarioAbierto] = useState(false);
   /** null = todos los barberos. Solo lo usa el administrador. */
   const [barberFilter, setBarberFilter] = useState<string | null>(null);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
 
   const esAdmin = user?.role === 'admin';
 
-  const barberos = useAsync(() => getBarbers(), []);
+  // Solo el administrador necesita la lista: para el filtro y para poner
+  // nombre a cada cita. Un barbero solo ve las suyas.
+  const barberos = useAsync(() => getBarbers(), [], esAdmin);
 
   /**
    * El filtro solo viaja si lo manda un administrador. Para un barbero el
@@ -68,6 +91,11 @@ export default function AgendaScreen() {
   }, [barberos.data]);
 
   const recargarAgenda = agenda.reload;
+
+  const elegirDia = useCallback((iso: string) => {
+    setSelectedDate(iso);
+    setVisibleMonth(monthKeyOf(iso));
+  }, []);
 
   const confirmarCancelacion = useCallback(
     (booking: Booking) => {
@@ -125,12 +153,71 @@ export default function AgendaScreen() {
     return <Redirect href="/admin/login" />;
   }
 
-  const citas = agenda.data ?? [];
+  /**
+   * Mientras se carga OTRO día no se enseñan las citas del anterior: serían
+   * datos de una fecha bajo el título de otra. Al recargar el mismo día sí se
+   * conservan, con el indicador de recarga encima.
+   */
+  const cargandoDia = agenda.loading && !agenda.refreshing;
+  const citas = cargandoDia ? [] : (agenda.data ?? []);
+  const hayDatos = !cargandoDia && agenda.error === null;
+
+  const ahora = horaActual();
+  const porAtender = citas.filter((cita) => !yaPaso(cita, hoy, ahora)).length;
+  // Las citas sin servicio no suman: se desconoce su precio, no es cero.
+  const estimado = citas.reduce((suma, cita) => suma + (cita.service?.priceCop ?? 0), 0);
 
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView
+        contentContainerStyle={styles.content}
+        refreshControl={
+          <RefreshControl
+            refreshing={agenda.refreshing}
+            onRefresh={recargarAgenda}
+            tintColor={colors.primaryText}
+            colors={[colors.primary]}
+          />
+        }
+      >
         <AdminHeader user={user} onLogout={cerrarSesion} />
+
+        <DayNavigator
+          date={selectedDate}
+          today={hoy}
+          onChange={elegirDia}
+          expanded={calendarioAbierto}
+          onToggleCalendar={() => setCalendarioAbierto((abierto) => !abierto)}
+        />
+
+        {calendarioAbierto ? (
+          <Calendar
+            month={visibleMonth}
+            onMonthChange={setVisibleMonth}
+            selectedDate={selectedDate}
+            onSelectDate={(iso) => {
+              elegirDia(iso);
+              // Elegido el día, el calendario ya cumplió: se recoge para
+              // devolverle el sitio a las citas.
+              setCalendarioAbierto(false);
+            }}
+            isDayAvailable={TODOS_LOS_DIAS}
+            // Una agenda mira hacia atrás: hay que poder revisar qué pasó ayer.
+            allowPast
+          />
+        ) : null}
+
+        {hayDatos ? (
+          <View style={styles.resumen}>
+            <StatTile
+              icono="calendar-outline"
+              valor={String(citas.length)}
+              etiqueta={citas.length === 1 ? 'Cita' : 'Citas'}
+            />
+            <StatTile icono="time-outline" valor={String(porAtender)} etiqueta="Por atender" />
+            <StatTile icono="cash-outline" valor={formatCop(estimado)} etiqueta="Estimado" />
+          </View>
+        ) : null}
 
         {/*
           El filtro solo existe para el administrador. A un barbero el
@@ -138,7 +225,12 @@ export default function AgendaScreen() {
           selector de barberos sería un control que no controla nada.
         */}
         {esAdmin ? (
-          <View style={styles.filters} accessibilityRole="radiogroup">
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.filters}
+            accessibilityRole="radiogroup"
+          >
             <FilterChip
               label="Todos"
               selected={barberFilter === null}
@@ -152,52 +244,44 @@ export default function AgendaScreen() {
                 onPress={() => setBarberFilter(barbero.id)}
               />
             ))}
-          </View>
+          </ScrollView>
         ) : null}
 
-        <Calendar
-          month={visibleMonth}
-          onMonthChange={setVisibleMonth}
-          selectedDate={selectedDate}
-          onSelectDate={(iso) => {
-            setSelectedDate(iso);
-            setVisibleMonth(monthKeyOf(iso));
-          }}
-          isDayAvailable={TODOS_LOS_DIAS}
-          // Una agenda mira hacia atrás: hay que poder revisar qué pasó ayer.
-          allowPast
-        />
-
-        <View style={styles.dayHeading}>
-          <Text style={styles.dayLabel}>{formatShortDate(selectedDate)}</Text>
-          {!agenda.loading && agenda.error === null ? (
-            <Text style={styles.dayCount}>
-              {citas.length === 1 ? '1 cita' : `${citas.length} citas`}
-            </Text>
-          ) : null}
-        </View>
-
-        {agenda.loading ? (
-          <LoadingState label="Cargando la agenda..." slow={agenda.slow} />
-        ) : null}
+        {cargandoDia ? <LoadingState label="Cargando la agenda..." slow={agenda.slow} /> : null}
 
         {agenda.error !== null ? (
           <ErrorState error={agenda.error} onRetry={agenda.reload} />
         ) : null}
 
-        {!agenda.loading && agenda.error === null && citas.length === 0 ? (
-          <Text style={styles.empty}>No hay citas para este día.</Text>
+        {hayDatos && citas.length === 0 ? (
+          <EmptyState
+            icono="calendar-clear-outline"
+            titulo="No hay citas para este día."
+            detalle="Desliza hacia abajo para comprobar si entró alguna."
+          />
         ) : null}
 
-        {citas.map((booking) => (
-          <BookingRow
-            key={booking.id}
-            booking={booking}
-            barberName={nombrePorBarbero.get(booking.barberId) ?? booking.barberId}
-            onCancel={confirmarCancelacion}
-            cancelling={cancellingId === booking.id}
-          />
-        ))}
+        {citas.length > 0 ? (
+          <View style={styles.lista}>
+            <Text style={styles.seccion}>Citas del día</Text>
+
+            {citas.map((booking) => (
+              <BookingRow
+                key={booking.id}
+                booking={booking}
+                // A un barbero no se le repite su propio nombre en cada cita.
+                barberName={
+                  esAdmin
+                    ? (nombrePorBarbero.get(booking.barberId) ?? booking.barberId)
+                    : undefined
+                }
+                onCancel={confirmarCancelacion}
+                cancelling={cancellingId === booking.id}
+                past={yaPaso(booking, hoy, ahora)}
+              />
+            ))}
+          </View>
+        ) : null}
       </ScrollView>
     </SafeAreaView>
   );
@@ -210,32 +294,20 @@ const makeStyles = (colors: Palette) => StyleSheet.create({
   },
   content: {
     padding: spacing.md,
+    gap: spacing.md,
+  },
+  resumen: {
+    flexDirection: 'row',
     gap: spacing.sm,
   },
   filters: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
     gap: spacing.xs,
-    paddingBottom: spacing.xs,
   },
-  dayHeading: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    justifyContent: 'space-between',
-    paddingTop: spacing.sm,
+  lista: {
+    gap: spacing.sm,
   },
-  dayLabel: {
-    ...typography.cardTitle,
-    color: colors.textPrimary,
-  },
-  dayCount: {
-    ...typography.meta,
+  seccion: {
+    ...typography.micro,
     color: colors.textSecondary,
-  },
-  empty: {
-    ...typography.body,
-    color: colors.textMuted,
-    textAlign: 'center',
-    paddingVertical: spacing.xl,
   },
 });

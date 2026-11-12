@@ -269,6 +269,7 @@ describe('useRequireBooking', () => {
         customerName: 'Cliente Prueba',
         customerPhone: '3000000000',
         status: 'activa',
+        service: null,
         createdAt: '2026-11-10T10:00:00.000Z',
       });
     });

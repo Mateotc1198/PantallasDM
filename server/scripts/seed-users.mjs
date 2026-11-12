@@ -12,8 +12,14 @@ import 'dotenv/config';
  * bcrypt commiteado sigue siendo una credencial publicada, y basta con un
  * diccionario y tiempo para romperlo.
  *
- * Es idempotente: se ejecuta en cada despliegue y, si la cuenta ya existe,
- * actualiza su contraseña en vez de fallar.
+ * Es idempotente: se ejecuta en cada despliegue y no falla si la cuenta ya
+ * existe. Qué hace entonces depende del rol:
+ *
+ *   admin    actualiza su contraseña. Es la única forma de cambiarla, y de
+ *            recuperar el acceso si se pierde.
+ *   barbero  no la toca. Desde que el administrador gestiona las cuentas de
+ *            los barberos en el panel, lo que haya puesto ahí manda: este
+ *            script solo crea la cuenta inicial si todavía no existe.
  *
  * JavaScript plano y no TypeScript porque corre en el arranque, donde tsx es
  * una dependencia de desarrollo que puede no estar instalada.
@@ -65,6 +71,33 @@ try {
 
     const hash = await bcrypt.hash(cuenta.password, BCRYPT_ROUNDS);
 
+    const valores = [cuenta.username.trim().toLowerCase(), hash, cuenta.role, cuenta.barberId ?? null];
+
+    if (cuenta.role === 'barbero') {
+      // ON CONFLICT sin columna: se salta la fila si choca con CUALQUIER
+      // restricción única, sea el usuario o el barbero.
+      //
+      // No es un detalle. El administrador puede haberle cambiado el usuario
+      // a este barbero desde el panel; entonces el usuario del entorno ya no
+      // existe, pero el barbero sí tiene cuenta. Un ON CONFLICT (username)
+      // intentaría insertar una segunda cuenta para el mismo barbero, el
+      // índice users_barbero_unico lo rechazaría con un error, y este script
+      // corre en el arranque: el servidor no levantaría.
+      const resultado = await client.query(
+        `INSERT INTO users (username, password_hash, role, barber_id)
+         VALUES ($1, $2, $3, $4)
+         ON CONFLICT DO NOTHING`,
+        valores,
+      );
+
+      console.log(
+        resultado.rowCount === 0
+          ? `  cuenta ya existente, no se toca: ${cuenta.username} (barbero)`
+          : `  cuenta creada: ${cuenta.username} (barbero)`,
+      );
+      continue;
+    }
+
     await client.query(
       `INSERT INTO users (username, password_hash, role, barber_id)
        VALUES ($1, $2, $3, $4)
@@ -72,7 +105,7 @@ try {
          SET password_hash = EXCLUDED.password_hash,
              role          = EXCLUDED.role,
              barber_id     = EXCLUDED.barber_id`,
-      [cuenta.username.trim().toLowerCase(), hash, cuenta.role, cuenta.barberId ?? null],
+      valores,
     );
 
     console.log(`  cuenta lista: ${cuenta.username} (${cuenta.role})`);

@@ -28,6 +28,7 @@ import { useTheme } from '../../src/theme/ThemeContext';
 import { radius, spacing, typography, type Palette } from '../../src/theme/tokens';
 import { useThemedStyles } from '../../src/theme/useThemedStyles';
 import { formatDayMonthYear, formatTime12h } from '../../src/utils/date';
+import { formatCop } from '../../src/utils/money';
 
 const PHONE_LENGTH = 10;
 const UUID_LENGTH = 36;
@@ -188,6 +189,12 @@ export default function MiCitaScreen() {
 
               <Card>
                 <SummaryRow label="Barbero" value={nombreBarbero} />
+                {cita.data.service !== null ? (
+                  <>
+                    <SummaryRow label="Servicio" value={cita.data.service.name} />
+                    <SummaryRow label="Precio" value={formatCop(cita.data.service.priceCop)} />
+                  </>
+                ) : null}
                 <SummaryRow label="Fecha" value={formatDayMonthYear(cita.data.date)} />
                 <SummaryRow label="Hora" value={formatTime12h(cita.data.time)} />
                 <SummaryRow label="Nombre" value={cita.data.customerName} />
