@@ -1,10 +1,37 @@
 # ZONABARBER
 
+[![CI](https://github.com/Mateotc1198/PantallasDM/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Mateotc1198/PantallasDM/actions/workflows/ci.yml)
+[![Quality Gate](https://sonarcloud.io/api/project_badges/measure?project=Mateotc1198_PantallasDM&metric=alert_status)](https://sonarcloud.io/project/overview?id=Mateotc1198_PantallasDM)
+[![Cobertura](https://sonarcloud.io/api/project_badges/measure?project=Mateotc1198_PantallasDM&metric=coverage)](https://sonarcloud.io/project/overview?id=Mateotc1198_PantallasDM)
+
 Sistema de reservas para barbería: aplicación móvil + API REST + base de datos.
 
 Proyecto final de Desarrollo de Dispositivos Móviles.
 
 ---
+
+## Entrega
+
+| Qué | Dónde |
+| --- | --- |
+| API desplegada | <https://pantallasdm-api.onrender.com/health> |
+| APK de Android | [Releases de este repositorio](https://github.com/marianamunozch/PantallasDM/releases) |
+| Análisis de calidad y cobertura | [SonarQube Cloud](https://sonarcloud.io/project/overview?id=Mateotc1198_PantallasDM) |
+| Integración continua | [GitHub Actions](https://github.com/Mateotc1198/PantallasDM/actions/workflows/ci.yml) |
+| Colección de Postman | [`server/postman/`](server/postman) |
+
+> **La primera petición tarda unos 20 segundos.** El plan gratuito de Render
+> duerme el servicio tras un rato sin tráfico. La app lo avisa en pantalla
+> ("El servidor estaba inactivo y está despertando") en vez de quedarse en
+> blanco.
+
+> **El CI y Sonar corren en un fork.** Este repositorio es el de la entrega; las
+> ejecuciones de GitHub Actions, el análisis de Sonar y el despliegue en Render
+> salen de [`Mateotc1198/PantallasDM`](https://github.com/Mateotc1198/PantallasDM),
+> que se sincroniza con `Develop` y `main` de este después de cada Pull Request.
+
+Las credenciales del panel de administración no están en el repositorio: se
+entregan aparte.
 
 ## Qué resuelve
 
@@ -13,27 +40,62 @@ esperar a que alguien confirme. El cliente no sabe qué horas están libres y el
 barbero pierde tiempo coordinando por chat.
 
 ZONABARBER deja al cliente elegir barbero, día y hora en menos de un minuto,
-viendo la disponibilidad real, y le da al administrador un panel para gestionar
-la agenda.
+viendo la disponibilidad real, y le da a la barbería un panel para gestionar la
+agenda, la plantilla de barberos y el catálogo de servicios.
+
+## Qué hace
+
+**El cliente, sin crear cuenta:**
+
+- Reserva en cinco pasos: barbero, perfil y reseñas, día, hora y sus datos.
+- Solo ve los días y las horas que de verdad están libres.
+- Consulta su cita, la **aplaza** o la **cancela**, hasta dos horas antes.
+- Ve el catálogo de servicios con precios, y los datos de contacto.
+- Elige tema oscuro o claro; la app recuerda la elección.
+
+**El panel, con inicio de sesión:**
+
+| Rol | Puede |
+| --- | --- |
+| `barbero` | Ver y cancelar **sus propias** citas |
+| `admin` | Ver y cancelar **todas** las citas; crear, editar y dar de baja barberos; crear, editar y eliminar servicios |
+
+**Reglas de negocio que el servidor hace cumplir:**
+
+- Dos personas no pueden reservar la misma franja, ni siquiera a la vez: lo
+  impide un índice único en la base de datos, no una comprobación previa.
+- No se reserva en el pasado, ni fuera del horario del barbero, ni en un día
+  que no atiende.
+- El cliente solo cambia su cita con el teléfono con el que la reservó, y no
+  cuando faltan menos de dos horas.
+- Un barbero solo ve y cancela su agenda, aunque manipule la petición.
+- No se da de baja a un barbero con citas activas pendientes.
 
 ## Estructura del repositorio
 
 ```
 .
-├── app/            Pantallas de la app móvil (expo-router, file-based routing)
+├── app/            Pantallas de la app móvil (expo-router, rutas por archivo)
 ├── src/            Componentes, estado, tipos y capa de datos del frontend
+├── __tests__/      Pruebas de la app
 ├── server/         API REST + base de datos  ← tiene su propio README
 ├── assets/         Iconos y splash
+├── .github/        Integración continua
 └── render.yaml     Infraestructura del despliegue
 ```
 
 | Capa | Tecnología |
 | --- | --- |
-| Móvil | React Native · Expo SDK 57 · expo-router · TypeScript strict |
-| API | Node · Express 5 · TypeScript strict |
+| Móvil | React Native · Expo SDK 58 · expo-router · TypeScript strict |
+| API | Node · Express 5 · TypeScript strict · zod |
 | Base de datos | PostgreSQL 17 |
-| Pruebas | Vitest · Supertest · Postman |
-| Despliegue | Render |
+| Seguridad | JWT · bcrypt · helmet · límite de peticiones |
+| Pruebas | Jest · Testing Library · Vitest · Supertest · Postman |
+| Calidad | ESLint · SonarQube Cloud · GitHub Actions |
+| Despliegue | Render (API y base de datos) · EAS Build (APK) |
+
+El backend está organizado por capas: rutas → controladores → servicios →
+repositorios. El detalle está en [`server/README.md`](server/README.md).
 
 ## Arrancar el proyecto
 
@@ -44,7 +106,9 @@ npm install
 npx expo start
 ```
 
-Escanear el QR con Expo Go. Funciona en iOS y Android sin builds nativos.
+Escanear el QR con Expo Go. Recién clonada, la app habla con la API desplegada:
+no hace falta levantar el backend para probarla. Para apuntarla a un backend
+local, ver [`.env.example`](.env.example).
 
 ### API y base de datos
 
@@ -65,33 +129,38 @@ npm run dev
 
 ## La API
 
-Seis endpoints bajo `/api/v1`:
+Veinte endpoints bajo `/api/v1`. La tabla completa, con quién puede usar cada
+uno y sus códigos HTTP, está en [`server/README.md`](server/README.md#endpoints).
 
-| Método | Ruta | Qué hace |
+| Recurso | Qué ofrece | Acceso |
 | --- | --- | --- |
-| `GET` | `/barbers` | Lista de barberos |
-| `GET` | `/barbers/:id` | Detalle con reseñas |
-| `GET` | `/barbers/:id/slots?date=` | Disponibilidad de un día |
-| `POST` | `/bookings` | Crear cita |
-| `GET` | `/bookings/:id` | Consultar cita |
-| `DELETE` | `/bookings/:id` | Cancelar cita |
+| `/auth` | Iniciar sesión y consultar la identidad | público / autenticado |
+| `/barbers` | Lista, detalle, disponibilidad por día y por mes | público |
+| `/barbers` | Crear, editar y dar de baja | **admin** |
+| `/bookings` | Reservar, consultar, aplazar y cancelar la propia cita | público |
+| `/bookings` | Agenda del panel y cancelación | **admin · barbero** |
+| `/services` | Catálogo | público |
+| `/services` | Crear, editar y eliminar | **admin** |
 
-La colección de Postman está en [`server/postman/`](server/postman), lista para
-importar y ejecutar de corrido.
+## Pruebas y calidad
+
+```bash
+npm test                    # app
+cd server && npm test       # API (necesita la base de datos de pruebas)
+```
+
+| | Pruebas | Qué cubren |
+| --- | --- | --- |
+| App | 361 | Pantallas, componentes, navegación, sesión y capa de datos |
+| API | 200 | Los 20 endpoints contra PostgreSQL real, roles y reglas de negocio |
+| Postman | 41 peticiones | El flujo completo, ejecutable de corrido |
+
+En cada cambio, GitHub Actions ejecuta el lint, la comprobación de tipos y las
+pruebas de la app y de la API, compila el bundle de Android y envía la cobertura
+a SonarQube Cloud. El informe es público en el enlace de arriba.
 
 ## Flujo del repositorio
 
-Ramas por funcionalidad, un Pull Request por rama hacia `Develop`, y commits en
-formato [Conventional Commits](https://www.conventionalcommits.org/es/). Las
-ramas siguen la pila de dependencias del código, así que cada commit del
-historial compila por sí solo.
-
-## Estado
-
-| Parte | Estado |
-| --- | --- |
-| App móvil: flujo de reserva | Completo |
-| API REST + PostgreSQL | Completo (49 tests) |
-| Autenticación y roles | En desarrollo |
-| App conectada a la API | En desarrollo |
-| Despliegue | En desarrollo |
+Ramas por funcionalidad, un Pull Request por rama hacia `Develop`, y de ahí a
+`main`. Los commits siguen el formato
+[Conventional Commits](https://www.conventionalcommits.org/es/).
