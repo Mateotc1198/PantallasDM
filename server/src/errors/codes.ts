@@ -19,6 +19,8 @@ export const ERROR_CODES = {
   UNAUTHORIZED: 'UNAUTHORIZED',
   INVALID_CREDENTIALS: 'INVALID_CREDENTIALS',
   TOKEN_EXPIRED: 'TOKEN_EXPIRED',
+  /** 401 - el token es auténtico, pero la cuenta ya no existe o cambió su clave. */
+  SESSION_REVOKED: 'SESSION_REVOKED',
   /** 403 - sabemos quién eres y no te alcanza. */
   FORBIDDEN: 'FORBIDDEN',
 
