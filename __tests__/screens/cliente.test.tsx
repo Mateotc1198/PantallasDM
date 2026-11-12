@@ -559,3 +559,16 @@ describe('mi cita: una cita que ya terminó', () => {
     expect(screen.queryByRole('button', { name: /Cancelar/ })).not.toBeOnTheScreen();
   });
 });
+
+describe('catálogo público: la imagen de cada servicio', () => {
+  it('enseña la imagen de los servicios que la tienen, y solo de esos', async () => {
+    services.getServices.mockResolvedValue([
+      { id: 's1', name: 'Fade', description: '', priceCop: 30000, category: 'Cortes', imageUrl: 'https://ejemplo.com/fade.jpg' },
+      { id: 's2', name: 'Barba', description: '', priceCop: 20000, category: 'Barba', imageUrl: null },
+    ]);
+    await renderApp(<ServiciosScreen />);
+
+    expect(await screen.findByLabelText('Imagen de Fade')).toBeOnTheScreen();
+    expect(screen.queryByLabelText('Imagen de Barba')).not.toBeOnTheScreen();
+  });
+});

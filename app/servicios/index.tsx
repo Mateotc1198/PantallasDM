@@ -16,6 +16,7 @@ import { ErrorState } from '../../src/components/ErrorState';
 import { FilterChip } from '../../src/components/FilterChip';
 import { FooterCta } from '../../src/components/FooterCta';
 import { LoadingState } from '../../src/components/LoadingState';
+import { ServiceThumb } from '../../src/components/ServiceThumb';
 import { TopBar } from '../../src/components/TopBar';
 import { getServices } from '../../src/data/services';
 import { useAsync } from '../../src/hooks/useAsync';
@@ -182,6 +183,9 @@ function ServicioCard({ servicio }: { servicio: Service }) {
 
   return (
     <View style={styles.tarjeta}>
+      {servicio.imageUrl !== null ? (
+        <ServiceThumb uri={servicio.imageUrl} nombre={servicio.name} size={64} />
+      ) : null}
       <View style={styles.tarjetaTexto}>
         <Text style={styles.tarjetaNombre}>{servicio.name}</Text>
         {servicio.description.length > 0 ? (

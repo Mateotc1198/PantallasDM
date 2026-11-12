@@ -9,10 +9,7 @@ import {
   monthQuerySchema,
   slotsQuerySchema,
 } from '../dto/barbers.dto.js';
-import { withAbsoluteAvatar } from '../serializers/barber.serializer.js';
-
-/** Un año: la URL de la foto cambia en cada subida, así que nunca caduca. */
-const CACHE_DE_FOTO = 'public, max-age=31536000, immutable';
+import { sendPhoto, withAbsoluteAvatar } from '../serializers/media-url.serializer.js';
 
 /**
  * Controladores de barberos.
@@ -40,25 +37,12 @@ export async function getById(req: Request, res: Response): Promise<void> {
 /**
  * GET /api/v1/barbers/:id/photo
  *
- * Devuelve los bytes de la foto subida, no JSON. Es pública, como la ficha:
- * la ve cualquier cliente al elegir barbero.
- *
- * El Content-Type sale de lo que se detectó al subirla, nunca de lo que dijo
- * el cliente, y helmet añade nosniff: el navegador no puede reinterpretar la
- * imagen como otra cosa.
+ * La foto subida, como imagen. Pública, como la ficha: la ve cualquier
+ * cliente al elegir barbero.
  */
 export async function getPhoto(req: Request, res: Response): Promise<void> {
   const { id } = barberIdParamsSchema.parse(req.params);
-  const photo = await barbersService.getPhoto(id);
-
-  res
-    .status(200)
-    .set('Content-Type', photo.contentType)
-    .set('Cache-Control', CACHE_DE_FOTO)
-    // helmet restringe por defecto los recursos al mismo origen; una imagen
-    // pública tiene que poder cargarse desde la app web en otro dominio.
-    .set('Cross-Origin-Resource-Policy', 'cross-origin')
-    .send(photo.content);
+  sendPhoto(res, await barbersService.getPhoto(id));
 }
 
 /** POST /api/v1/barbers */
