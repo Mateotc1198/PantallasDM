@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { act, renderHook, waitFor } from '@testing-library/react-native';
-import { StyleSheet } from 'react-native';
+import * as SystemUI from 'expo-system-ui';
+import { Appearance, StyleSheet } from 'react-native';
 
 import { BookingProvider, useBooking } from '../../src/context/BookingContext';
 import { ThemeProvider, useTheme } from '../../src/theme/ThemeContext';
@@ -73,6 +74,44 @@ describe('tema', () => {
     });
 
     expect(result.current.name).toBe('dark');
+  });
+
+  describe('lo que pinta el sistema sigue al tema', () => {
+    const fondo = jest.mocked(SystemUI.setBackgroundColorAsync);
+
+    beforeEach(() => {
+      fondo.mockClear();
+    });
+
+    it('al arrancar, el fondo de la ventana es el del tema oscuro', async () => {
+      await renderHook(() => useTheme(), { wrapper: ThemeProvider });
+
+      expect(fondo).toHaveBeenLastCalledWith(darkPalette.bg);
+    });
+
+    it('al cambiar a claro, cambian el fondo de la ventana y el modo del sistema', async () => {
+      const modo = jest.spyOn(Appearance, 'setColorScheme');
+      const { result } = await renderHook(() => useTheme(), { wrapper: ThemeProvider });
+
+      await act(async () => {
+        result.current.toggle();
+      });
+
+      expect(fondo).toHaveBeenLastCalledWith(lightPalette.bg);
+      expect(modo).toHaveBeenLastCalledWith('light');
+      modo.mockRestore();
+    });
+
+    it('si el sistema no deja cambiar el fondo, la app sigue funcionando', async () => {
+      fondo.mockRejectedValueOnce(new Error('no soportado'));
+
+      const { result } = await renderHook(() => useTheme(), { wrapper: ThemeProvider });
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      expect(result.current.name).toBe('dark');
+    });
   });
 
   it('fuera del proveedor falla con un mensaje que dice qué falta', async () => {

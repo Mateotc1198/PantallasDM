@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as SystemUI from 'expo-system-ui';
 import { Appearance } from 'react-native';
 import {
   createContext,
@@ -75,13 +76,22 @@ export function ThemeProvider({ children }: PropsWithChildren) {
   }, [name, setTheme]);
 
   /**
-   * El teclado, los diálogos de Alert y las barras de desplazamiento los
-   * pinta el sistema, no nosotros: hay que decirle en qué modo estamos o
-   * seguirían oscuros con la aplicación en claro. Va junto con
-   * userInterfaceStyle "automatic" en app.json.
+   * Lo que pinta el sistema, no nosotros, también tiene que seguir al tema.
+   *
+   * - El teclado, los diálogos de Alert y las barras de desplazamiento: se
+   *   les dice en qué modo estamos o seguirían oscuros con la app en claro.
+   *   Va junto con userInterfaceStyle "automatic" en app.json, que en
+   *   Android solo surte efecto con expo-system-ui instalado.
+   * - El fondo de la ventana nativa, que asoma detrás de la app al cambiar de
+   *   pantalla o al abrirse el teclado. Sin esto, en modo claro se veía un
+   *   destello oscuro en cada transición.
+   *
+   * Si el sistema no deja cambiar el fondo, no pasa nada grave: solo se nota
+   * en las transiciones, así que no merece un error.
    */
   useEffect(() => {
     Appearance.setColorScheme(name);
+    SystemUI.setBackgroundColorAsync(palettes[name].bg).catch(() => undefined);
   }, [name]);
 
   const value = useMemo<ThemeContextValue>(

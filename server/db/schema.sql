@@ -204,6 +204,7 @@ CREATE TABLE IF NOT EXISTS users (
   password_hash TEXT        NOT NULL,
   role          user_role   NOT NULL,
   barber_id     TEXT        REFERENCES barbers(id) ON DELETE CASCADE,
+  session_version INTEGER   NOT NULL DEFAULT 0 CHECK (session_version >= 0),
   created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
 
   CONSTRAINT rol_coherente CHECK (
@@ -211,6 +212,15 @@ CREATE TABLE IF NOT EXISTS users (
     (role = 'admin'   AND barber_id IS NULL)
   )
 );
+
+-- Version de las credenciales. Sube cada vez que cambian el usuario o la
+-- contrasena, y viaja dentro del token: un token emitido con una version
+-- anterior deja de valer. Es lo que cierra las sesiones abiertas cuando el
+-- administrador le cambia la clave a alguien. Las bases que ya existian no
+-- pasan por el CREATE TABLE de arriba, de ahi el ALTER idempotente.
+ALTER TABLE users
+  ADD COLUMN IF NOT EXISTS session_version INTEGER NOT NULL DEFAULT 0
+  CHECK (session_version >= 0);
 
 -- Un barbero no puede tener dos cuentas.
 CREATE UNIQUE INDEX IF NOT EXISTS users_barbero_unico

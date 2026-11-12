@@ -488,7 +488,7 @@ La distinción entre los códigos de error no es decorativa:
 | Código | Significa | Ejemplo real |
 | --- | --- | --- |
 | `400` | No entiendo la petición (**forma**) | `date=14-07-2026`, teléfono con letras |
-| `401` | No sé quién eres | sin token, token manipulado o expirado |
+| `401` | No sé quién eres | sin token, token manipulado o expirado, o la cuenta ya no es válida |
 | `403` | Sé quién eres y no te alcanza | un barbero cancelando una cita ajena |
 | `404` | El recurso no existe | barbero o cita inexistente |
 | `409` | Choca con el **estado actual** | ese horario ya está reservado |
@@ -668,11 +668,24 @@ contraseña en claro no se guarda nunca, ni siquiera en los logs.
 | Límite de 10 intentos por minuto en el login | Es la puerta por la que se prueban contraseñas. |
 | Sin credenciales en el repositorio | Las cuentas se crean desde variables de entorno con `npm run users:seed`. Un hash commiteado sigue siendo una credencial publicada. |
 
-**Contrapartida honesta del diseño stateless:** la identidad sale del propio
-token y no se consulta la base en cada petición. Si a alguien se le cambia el
-rol o se le borra la cuenta, su token sigue siendo válido hasta que expire (8 h
-por defecto). La solución sería una lista de revocación; para este tamaño sería
-sobreingeniería, y acortar la vigencia es el ajuste razonable.
+**Una sesión no sobrevive a los cambios de su cuenta.** Que el token sea
+auténtico no basta: en cada petición del panel se comprueba además que la cuenta
+siga existiendo, que su barbero no esté de baja y que la versión de sus
+credenciales sea la del token. Esa versión (`users.session_version`) sube cada
+vez que cambian el usuario o la contraseña.
+
+Antes la identidad salía solo del token, y una sesión seguía abierta hasta 8
+horas después de quitarle el acceso a un barbero, darlo de baja o cambiarle la
+clave. Ahora surte efecto en la siguiente petición (`401 SESSION_REVOKED`), y
+la app vuelve sola a la pantalla de inicio de sesión. El coste es una lectura
+por clave primaria en cada petición del panel.
+
+La identidad que se usa es la de la base, no la del token: si el rol o la
+ficha cambiaran, manda lo actual.
+
+El script de cuentas iniciales solo reescribe la contraseña del administrador
+si la del entorno es otra. Reescribirla siempre subiría la versión y cerraría
+su sesión en cada despliegue.
 
 ---
 
