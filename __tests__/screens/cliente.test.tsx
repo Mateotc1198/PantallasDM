@@ -544,3 +544,18 @@ describe('mi cita: el servicio', () => {
     expect(screen.queryByText('Servicio')).not.toBeOnTheScreen();
   });
 });
+
+describe('mi cita: una cita que ya terminó', () => {
+  it.each([
+    ['atendida', /ya se atendió/],
+    ['no_asistio', /no asistida/],
+  ] as const)('una cita %s lo explica y no ofrece aplazar ni cancelar', async (status, aviso) => {
+    await AsyncStorage.setItem(CLAVE_CITA, CITA.id);
+    bookings.getBooking.mockResolvedValue({ ...CITA, status });
+    await renderApp(<MiCitaScreen />);
+
+    expect(await screen.findByText(aviso)).toBeOnTheScreen();
+    expect(screen.queryByRole('button', { name: /Aplazar/ })).not.toBeOnTheScreen();
+    expect(screen.queryByRole('button', { name: /Cancelar/ })).not.toBeOnTheScreen();
+  });
+});

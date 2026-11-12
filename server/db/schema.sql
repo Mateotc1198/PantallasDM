@@ -19,10 +19,20 @@ BEGIN;
 DO $$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'booking_status') THEN
-    CREATE TYPE booking_status AS ENUM ('activa', 'cancelada');
+    CREATE TYPE booking_status AS ENUM ('activa', 'cancelada', 'atendida', 'no_asistio');
   END IF;
 END
 $$;
+
+-- Como termino una cita a la que nadie cancelo: el barbero la atendio, o el
+-- cliente no vino. Las bases que ya existian tienen el tipo con dos valores y
+-- no pasan por el CREATE TYPE de arriba, de ahi estos ALTER idempotentes.
+--
+-- ADD VALUE dentro de una transaccion es valido desde PostgreSQL 12. Lo unico
+-- que no se puede es usar el valor nuevo antes del COMMIT, y este archivo no
+-- lo usa.
+ALTER TYPE booking_status ADD VALUE IF NOT EXISTS 'atendida';
+ALTER TYPE booking_status ADD VALUE IF NOT EXISTS 'no_asistio';
 
 -- ---------------------------------------------------------------------------
 -- barbers
@@ -62,6 +72,30 @@ COMMENT ON COLUMN barbers.deleted_at IS 'Momento de la baja. NULL = barbero acti
 CREATE UNIQUE INDEX IF NOT EXISTS barbers_nombre_unico
   ON barbers (lower(name))
   WHERE deleted_at IS NULL;
+
+-- ---------------------------------------------------------------------------
+-- barber_photos
+--
+-- La foto que el administrador sube desde la galeria del telefono.
+--
+-- Se guarda en la base y no en disco porque el servidor no tiene disco que
+-- dure: en la nube cada despliegue arranca con el sistema de archivos limpio.
+-- La alternativa era un servicio de almacenamiento externo, con su cuenta y
+-- sus claves; para una barberia con un punado de barberos y fotos de unos
+-- 50 KB, eso seria mas piezas que moverse que problema que resolver.
+--
+-- Va en una tabla aparte y no como columna de barbers para que listar los
+-- barberos no arrastre los bytes de todas las fotos en cada consulta.
+--
+-- Los dos CHECK repiten lo que valida el codigo: aunque alguien inserte a
+-- mano, aqui no entra ni un formato raro ni un archivo enorme.
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS barber_photos (
+  barber_id    TEXT        PRIMARY KEY REFERENCES barbers(id) ON DELETE CASCADE,
+  content      BYTEA       NOT NULL CHECK (octet_length(content) <= 307200),
+  content_type TEXT        NOT NULL CHECK (content_type IN ('image/jpeg', 'image/png')),
+  updated_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+);
 
 -- ---------------------------------------------------------------------------
 -- reviews

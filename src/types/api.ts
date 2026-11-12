@@ -13,7 +13,10 @@
 export type SlotStatus = 'libre' | 'ocupado';
 
 /** Estado de una cita. */
-export type BookingStatus = 'activa' | 'cancelada';
+export type BookingStatus = 'activa' | 'cancelada' | 'atendida' | 'no_asistio';
+
+/** Cómo terminó una cita que nadie canceló. Lo marca el panel. */
+export type BookingOutcome = 'atendida' | 'no_asistio';
 
 /** Reseña de un cliente sobre un barbero. */
 export interface Review {
@@ -53,7 +56,19 @@ export type BarberSummary = Omit<Barber, 'reviews'>;
  * El id lo deriva el servidor del nombre; la calificación y los conteos se
  * calculan. Un cliente no puede fijar ninguno de los tres.
  */
-export type BarberInput = Pick<Barber, 'name' | 'specialty' | 'avatar'>;
+export interface BarberInput {
+  name: string;
+  specialty: string;
+  /** URL https de una foto alojada en otro sitio. */
+  avatar?: string;
+  /**
+   * La foto misma, en base64 (JPEG o PNG), elegida de la galería.
+   *
+   * Va una de las dos, nunca ambas. Al crear hace falta una; al editar, si no
+   * va ninguna, el servidor conserva la foto que ya tenía.
+   */
+  photo?: string;
+}
 
 /**
  * Cuerpo de PUT /barbers/:id/account: el acceso de un barbero al panel.

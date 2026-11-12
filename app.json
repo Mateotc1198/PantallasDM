@@ -10,7 +10,16 @@
     "backgroundColor": "#121014",
     "plugins": [
       "expo-router",
-      "expo-secure-store"
+      "expo-secure-store",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "ZonaBarber usa la foto que elijas para la imagen de un barbero.",
+          "cameraPermission": false,
+          "microphonePermission": false
+        }
+      ],
+      "expo-status-bar"
     ],
     "ios": {
       "supportsTablet": true,

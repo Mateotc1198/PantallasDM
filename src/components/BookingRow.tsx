@@ -5,7 +5,7 @@ import { enlaceWhatsAppCliente } from '../config/barberia';
 import { useTheme } from '../theme/ThemeContext';
 import { radius, spacing, typography, type Palette } from '../theme/tokens';
 import { useThemedStyles } from '../theme/useThemedStyles';
-import type { Booking } from '../types/api';
+import type { Booking, BookingOutcome } from '../types/api';
 import { formatTime12h } from '../utils/date';
 import { formatCop } from '../utils/money';
 
@@ -16,26 +16,43 @@ interface BookingRowProps {
    * las citas que ve son suyas y repetirlo en cada tarjeta es ruido.
    */
   barberName?: string;
+  /**
+   * Ya llegó la hora de la cita. Antes se puede cancelar; desde entonces lo
+   * que toca es decir cómo terminó.
+   */
+  started: boolean;
   onCancel: (booking: Booking) => void;
-  cancelling?: boolean;
-  /** La hora de la cita ya pasó: se atenúa para que destaque lo que falta. */
-  past?: boolean;
+  onOutcome: (booking: Booking, outcome: BookingOutcome) => void;
+  /** Hay una acción en curso sobre esta cita: sus botones no responden. */
+  busy?: boolean;
 }
+
+/** Cómo se ve cada estado de cierre en la píldora de la tarjeta. */
+const ETIQUETA_DE_ESTADO: Record<BookingOutcome, string> = {
+  atendida: 'Atendida',
+  no_asistio: 'No vino',
+};
 
 /**
  * Una cita en la agenda.
  *
  * La hora va primero, en un bloque propio, porque es el dato por el que se
- * busca: quien mira esta lista está comprobando qué le toca a las diez, no
- * quién es el tercer cliente del día. Debajo del cliente va lo que hay que
- * hacerle, que es lo siguiente que el barbero necesita saber.
+ * busca. Debajo del cliente va lo que hay que hacerle.
+ *
+ * Las acciones cambian con el momento de la cita:
+ * - antes de su hora: escribirle al cliente y cancelar;
+ * - desde su hora: marcar si vino o no. Una cita que ya pasó y nadie marcó
+ *   lleva el aviso "Sin marcar", para que no se quede así.
+ * Ya marcada, el botón del estado actual queda resaltado y el otro sirve para
+ * corregir un toque equivocado.
  */
 export function BookingRow({
   booking,
   barberName,
+  started,
   onCancel,
-  cancelling = false,
-  past = false,
+  onOutcome,
+  busy = false,
 }: BookingRowProps) {
   const styles = useThemedStyles(makeStyles);
   const { colors } = useTheme();
@@ -43,6 +60,9 @@ export function BookingRow({
   const hora = formatTime12h(booking.time);
   // "9:30 am" -> ["9:30", "am"]: el número grande y el periodo pequeño.
   const [reloj, periodo = ''] = hora.split(' ');
+
+  const cerrada = booking.status === 'atendida' || booking.status === 'no_asistio';
+  const sinMarcar = started && booking.status === 'activa';
 
   const escribir = () => {
     void Linking.openURL(
@@ -54,7 +74,7 @@ export function BookingRow({
   };
 
   return (
-    <View style={[styles.row, past && styles.rowPast]}>
+    <View style={[styles.row, cerrada && styles.rowCerrada, sinMarcar && styles.rowSinMarcar]}>
       <View style={styles.timeBlock}>
         <Text style={styles.time}>{reloj}</Text>
         <Text style={styles.period}>{periodo}</Text>
@@ -87,6 +107,30 @@ export function BookingRow({
             <Text style={styles.meta}>{booking.customerPhone}</Text>
           </View>
         </View>
+
+        {cerrada ? (
+          <View
+            style={[
+              styles.pill,
+              booking.status === 'atendida' ? styles.pillAtendida : styles.pillNoVino,
+            ]}
+          >
+            <Text
+              style={[
+                styles.pillTexto,
+                booking.status === 'atendida' ? styles.pillTextoAtendida : styles.pillTextoNoVino,
+              ]}
+            >
+              {ETIQUETA_DE_ESTADO[booking.status as BookingOutcome]}
+            </Text>
+          </View>
+        ) : null}
+
+        {sinMarcar ? (
+          <View style={[styles.pill, styles.pillPendiente]}>
+            <Text style={[styles.pillTexto, styles.pillTextoPendiente]}>Sin marcar</Text>
+          </View>
+        ) : null}
       </View>
 
       <View style={styles.actions}>
@@ -100,11 +144,13 @@ export function BookingRow({
           <Ionicons name="logo-whatsapp" size={18} color={colors.whatsapp} />
         </Pressable>
 
-        {cancelling ? (
+        {busy ? (
           <View style={styles.action}>
-            <ActivityIndicator size="small" color={colors.busy} />
+            <ActivityIndicator size="small" color={colors.primaryText} />
           </View>
-        ) : (
+        ) : null}
+
+        {!busy && !started ? (
           <Pressable
             onPress={() => onCancel(booking)}
             hitSlop={6}
@@ -114,7 +160,50 @@ export function BookingRow({
           >
             <Ionicons name="close" size={18} color={colors.busy} />
           </Pressable>
-        )}
+        ) : null}
+
+        {!busy && started ? (
+          <>
+            <Pressable
+              onPress={() => onOutcome(booking, 'atendida')}
+              disabled={booking.status === 'atendida'}
+              hitSlop={6}
+              accessibilityRole="button"
+              accessibilityLabel={`Marcar atendida la cita de ${booking.customerName}`}
+              accessibilityState={{ selected: booking.status === 'atendida' }}
+              style={({ pressed }) => [
+                styles.action,
+                booking.status === 'atendida' && styles.actionAtendida,
+                pressed && styles.pressed,
+              ]}
+            >
+              <Ionicons
+                name="checkmark"
+                size={18}
+                color={booking.status === 'atendida' ? colors.onPrimary : colors.freeText}
+              />
+            </Pressable>
+            <Pressable
+              onPress={() => onOutcome(booking, 'no_asistio')}
+              disabled={booking.status === 'no_asistio'}
+              hitSlop={6}
+              accessibilityRole="button"
+              accessibilityLabel={`Marcar que ${booking.customerName} no vino`}
+              accessibilityState={{ selected: booking.status === 'no_asistio' }}
+              style={({ pressed }) => [
+                styles.action,
+                booking.status === 'no_asistio' && styles.actionNoVino,
+                pressed && styles.pressed,
+              ]}
+            >
+              <Ionicons
+                name="person-remove-outline"
+                size={17}
+                color={booking.status === 'no_asistio' ? colors.onPrimary : colors.busy}
+              />
+            </Pressable>
+          </>
+        ) : null}
       </View>
     </View>
   );
@@ -131,8 +220,13 @@ const makeStyles = (colors: Palette) => StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
   },
-  rowPast: {
-    opacity: 0.55,
+  // Una cita cerrada ya no pide nada: se atenúa para que destaque lo que falta.
+  rowCerrada: {
+    opacity: 0.7,
+  },
+  // Una que ya pasó sin marcar sí pide algo: el borde la señala.
+  rowSinMarcar: {
+    borderColor: colors.primary,
   },
   timeBlock: {
     width: 64,
@@ -184,6 +278,34 @@ const makeStyles = (colors: Palette) => StyleSheet.create({
     ...typography.meta,
     color: colors.textMuted,
   },
+  pill: {
+    alignSelf: 'flex-start',
+    marginTop: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+    borderRadius: radius.pill,
+  },
+  pillAtendida: {
+    backgroundColor: colors.free,
+  },
+  pillNoVino: {
+    backgroundColor: colors.busy,
+  },
+  pillPendiente: {
+    backgroundColor: colors.primarySoft,
+  },
+  pillTexto: {
+    ...typography.micro,
+  },
+  pillTextoAtendida: {
+    color: colors.onPrimary,
+  },
+  pillTextoNoVino: {
+    color: colors.onPrimary,
+  },
+  pillTextoPendiente: {
+    color: colors.primaryText,
+  },
   actions: {
     gap: spacing.xs,
   },
@@ -196,6 +318,14 @@ const makeStyles = (colors: Palette) => StyleSheet.create({
     backgroundColor: colors.surfaceAlt,
     borderWidth: 1,
     borderColor: colors.border,
+  },
+  actionAtendida: {
+    backgroundColor: colors.free,
+    borderColor: colors.free,
+  },
+  actionNoVino: {
+    backgroundColor: colors.busy,
+    borderColor: colors.busy,
   },
   pressed: {
     opacity: 0.6,

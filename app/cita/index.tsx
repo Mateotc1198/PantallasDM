@@ -27,12 +27,32 @@ import { guardarUltimaCita, leerUltimaCita, olvidarUltimaCita } from '../../src/
 import { useTheme } from '../../src/theme/ThemeContext';
 import { radius, spacing, typography, type Palette } from '../../src/theme/tokens';
 import { useThemedStyles } from '../../src/theme/useThemedStyles';
+import type { BookingStatus } from '../../src/types/api';
 import { formatDayMonthYear, formatTime12h } from '../../src/utils/date';
 import { formatCop } from '../../src/utils/money';
 
 const PHONE_LENGTH = 10;
 const UUID_LENGTH = 36;
 const KEYBOARD_BEHAVIOR = Platform.OS === 'ios' ? 'padding' : 'height';
+
+/**
+ * Lo que se le dice al cliente cuando su cita ya no está activa.
+ *
+ * Una cita cerrada no se puede cancelar ni aplazar; el servidor lo impide, y
+ * la pantalla ni siquiera ofrece los botones.
+ */
+const AVISO_POR_ESTADO: Record<
+  BookingStatus,
+  { texto: string; icono: keyof typeof Ionicons.glyphMap }
+> = {
+  activa: { texto: '', icono: 'time-outline' },
+  cancelada: { texto: 'Esta cita está cancelada.', icono: 'close-circle-outline' },
+  atendida: { texto: 'Esta cita ya se atendió. ¡Gracias por venir!', icono: 'checkmark-circle-outline' },
+  no_asistio: {
+    texto: 'Esta cita quedó registrada como no asistida.',
+    icono: 'alert-circle-outline',
+  },
+};
 
 export default function MiCitaScreen() {
   const styles = useThemedStyles(makeStyles);
@@ -182,8 +202,14 @@ export default function MiCitaScreen() {
             <>
               {!activa ? (
                 <View style={styles.aviso}>
-                  <Ionicons name="close-circle-outline" size={18} color={colors.busy} />
-                  <Text style={styles.avisoTexto}>Esta cita está cancelada.</Text>
+                  <Ionicons
+                    name={AVISO_POR_ESTADO[cita.data.status].icono}
+                    size={18}
+                    color={
+                      cita.data.status === 'atendida' ? colors.freeText : colors.busy
+                    }
+                  />
+                  <Text style={styles.avisoTexto}>{AVISO_POR_ESTADO[cita.data.status].texto}</Text>
                 </View>
               ) : null}
 

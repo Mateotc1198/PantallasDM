@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react';
 import { Alert } from 'react-native';
 
 import { toApiError } from '../api/client';
@@ -41,7 +41,12 @@ interface Opciones<Item extends { id: string }, Form> {
 
 export interface CrudForm<Item, Form> {
   form: Form;
-  setForm: (form: Form) => void;
+  /**
+   * Admite también una función, como el setState de React: para quien
+   * actualiza el formulario al terminar algo asíncrono (elegir una foto) y no
+   * debe pisar lo que se haya escrito mientras tanto.
+   */
+  setForm: Dispatch<SetStateAction<Form>>;
   abierto: boolean;
   /** null mientras se crea; el id del elemento mientras se edita. */
   editando: string | null;

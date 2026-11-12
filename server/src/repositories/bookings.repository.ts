@@ -1,6 +1,7 @@
 import { query } from '../config/database.js';
 import type {
   Booking,
+  BookingOutcome,
   BookingService,
   BookingStatus,
   CreateBookingInput,
@@ -163,7 +164,9 @@ export async function findActiveTimes(barberId: string, date: string): Promise<s
 }
 
 /**
- * Agenda: citas activas, con filtros opcionales por día y por barbero.
+ * Agenda: las citas que siguen en pie (activas, atendidas y no asistidas),
+ * con filtros opcionales por día y por barbero. Las canceladas no: para quien
+ * mira la agenda ya no ocupan ese hueco.
  *
  * Los filtros se resuelven dentro del SQL con "$1 IS NULL OR ..." en vez de
  * ir concatenando trozos de consulta según los parámetros recibidos. Así la
@@ -177,7 +180,7 @@ export async function findAgenda(filtros: {
   const rows = await query<BookingRow>(
     `SELECT ${RETURNING_COLUMNS}
      FROM bookings
-     WHERE status = 'activa'
+     WHERE status <> 'cancelada'
        AND ($1::date IS NULL OR booking_date = $1::date)
        AND ($2::text IS NULL OR barber_id = $2::text)
      ORDER BY booking_date, booking_time`,
@@ -200,6 +203,26 @@ export async function cancel(id: string): Promise<Booking | null> {
      WHERE id = $1 AND status = 'activa'
      RETURNING ${RETURNING_COLUMNS}`,
     [id],
+  );
+  const row = rows[0];
+  return row === undefined ? null : toBooking(row);
+}
+
+/**
+ * Marca cómo terminó una cita: atendida o no asistida.
+ *
+ * Acepta una cita activa o una ya marcada, para poder corregir un toque
+ * equivocado; nunca una cancelada. Como en cancel, la condición va en el
+ * UPDATE: si alguien la cancela a la vez, este no encuentra fila y devuelve
+ * null, en vez de pisar la cancelación.
+ */
+export async function setOutcome(id: string, outcome: BookingOutcome): Promise<Booking | null> {
+  const rows = await query<BookingRow>(
+    `UPDATE bookings
+     SET status = $2::booking_status
+     WHERE id = $1 AND status IN ('activa', 'atendida', 'no_asistio')
+     RETURNING ${RETURNING_COLUMNS}`,
+    [id, outcome],
   );
   const row = rows[0];
   return row === undefined ? null : toBooking(row);

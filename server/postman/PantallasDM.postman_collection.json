@@ -1398,7 +1398,150 @@
           "response": []
         },
         {
-          "name": "27. Cancelar con telefono equivocado (403)",
+          "name": "27. Marcar atendida antes de la hora (422)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenAdmin}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"atendida\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/bookings/{{bookingId}}/status",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "bookings",
+                "{{bookingId}}",
+                "status"
+              ]
+            },
+            "description": "Una cita solo se marca como atendida o \"no vino\" cuando ya llegó su hora. La de la colección es futura: el servidor lo rechaza. El caso de éxito lo cubren los tests de integración, porque la API no deja crear citas en el pasado."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('422 Unprocessable Entity', () => pm.response.to.have.status(422));",
+                  "pm.test('codigo BOOKING_NOT_STARTED', () => {",
+                  "    pm.expect(pm.response.json().error.code).to.eql('BOOKING_NOT_STARTED');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "28. Marcar sin token (401)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"atendida\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/bookings/{{bookingId}}/status",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "bookings",
+                "{{bookingId}}",
+                "status"
+              ]
+            },
+            "description": "Lo marca el panel, no el cliente: sin sesión no se puede."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('401 Unauthorized', () => pm.response.to.have.status(401));",
+                  "pm.test('codigo UNAUTHORIZED', () => {",
+                  "    pm.expect(pm.response.json().error.code).to.eql('UNAUTHORIZED');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "29. Marcar con un estado inválido (400)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenAdmin}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"activa\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/bookings/{{bookingId}}/status",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "bookings",
+                "{{bookingId}}",
+                "status"
+              ]
+            },
+            "description": "Solo \"atendida\" o \"no_asistio\". Volver a \"activa\" reabriría una franja que ya pasó."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400 Bad Request', () => pm.response.to.have.status(400));",
+                  "pm.test('codigo VALIDATION_ERROR', () => {",
+                  "    pm.expect(pm.response.json().error.code).to.eql('VALIDATION_ERROR');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "30. Cancelar con telefono equivocado (403)",
           "request": {
             "method": "POST",
             "header": [
@@ -1444,7 +1587,7 @@
           "response": []
         },
         {
-          "name": "28. Cancelar cita",
+          "name": "31. Cancelar cita",
           "request": {
             "method": "DELETE",
             "header": [
@@ -1484,7 +1627,7 @@
           "response": []
         },
         {
-          "name": "29. Cancelar cita ya cancelada (409)",
+          "name": "32. Cancelar cita ya cancelada (409)",
           "request": {
             "method": "DELETE",
             "header": [
@@ -1524,7 +1667,7 @@
           "response": []
         },
         {
-          "name": "30. Cita inexistente (404)",
+          "name": "33. Cita inexistente (404)",
           "request": {
             "method": "GET",
             "header": [],
@@ -1559,7 +1702,7 @@
           "response": []
         },
         {
-          "name": "31. Agenda completa (admin)",
+          "name": "34. Agenda completa (admin)",
           "request": {
             "method": "GET",
             "header": [
@@ -1598,7 +1741,7 @@
           "response": []
         },
         {
-          "name": "32. Agenda propia (barbero)",
+          "name": "35. Agenda propia (barbero)",
           "request": {
             "method": "GET",
             "header": [
@@ -1639,7 +1782,7 @@
           "response": []
         },
         {
-          "name": "33. Agenda sin token (401)",
+          "name": "36. Agenda sin token (401)",
           "request": {
             "method": "GET",
             "header": [],
@@ -1678,7 +1821,7 @@
       "name": "Gestión de barberos",
       "item": [
         {
-          "name": "34. Crear barbero (admin)",
+          "name": "37. Crear barbero (admin)",
           "request": {
             "method": "POST",
             "header": [
@@ -1736,7 +1879,7 @@
           "response": []
         },
         {
-          "name": "35. Crear barbero repetido (409)",
+          "name": "38. Crear barbero repetido (409)",
           "request": {
             "method": "POST",
             "header": [
@@ -1783,7 +1926,7 @@
           "response": []
         },
         {
-          "name": "36. Crear barbero sin token (401)",
+          "name": "39. Crear barbero sin token (401)",
           "request": {
             "method": "POST",
             "header": [
@@ -1826,7 +1969,7 @@
           "response": []
         },
         {
-          "name": "37. Crear barbero como barbero (403)",
+          "name": "40. Crear barbero como barbero (403)",
           "request": {
             "method": "POST",
             "header": [
@@ -1873,7 +2016,7 @@
           "response": []
         },
         {
-          "name": "38. Crear barbero con foto sin https (400)",
+          "name": "41. Crear barbero con foto sin https (400)",
           "request": {
             "method": "POST",
             "header": [
@@ -1920,7 +2063,7 @@
           "response": []
         },
         {
-          "name": "39. Editar barbero (admin)",
+          "name": "42. Editar barbero (admin)",
           "request": {
             "method": "PUT",
             "header": [
@@ -1973,7 +2116,146 @@
           "response": []
         },
         {
-          "name": "40. Dar acceso al panel (admin)",
+          "name": "43. Subir foto desde la galería (admin)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenAdmin}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Barbero De Postman\",\n  \"specialty\": \"Especialidad editada desde la colección.\",\n  \"photo\": \"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/barbers/{{barberoNuevoId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "barbers",
+                "{{barberoNuevoId}}"
+              ]
+            },
+            "description": "La app manda la foto de la galería en base64 (JPEG o PNG, hasta 300 KB). El servidor la guarda y el avatar pasa a ser una URL de esta API. Aquí va un PNG de 1x1 píxel."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "",
+                  "pm.test('el avatar apunta a la foto guardada en la API', () => {",
+                  "    pm.expect(pm.response.json().avatar).to.match(/\\/api\\/v1\\/barbers\\/.+\\/photo\\?v=\\d+$/);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "44. Ver la foto del barbero",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/barbers/{{barberoNuevoId}}/photo",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "barbers",
+                "{{barberoNuevoId}}",
+                "photo"
+              ]
+            },
+            "description": "Pública, como la ficha. Devuelve la imagen, no JSON, con el tipo detectado de los bytes y caché larga: la URL cambia en cada subida."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "",
+                  "pm.test('es una imagen PNG, no JSON', () => {",
+                  "    pm.expect(pm.response.headers.get('Content-Type')).to.eql('image/png');",
+                  "});",
+                  "",
+                  "pm.test('el navegador no puede reinterpretarla como otra cosa', () => {",
+                  "    pm.expect(pm.response.headers.get('X-Content-Type-Options')).to.eql('nosniff');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "45. Subir algo que no es una imagen (400)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenAdmin}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Barbero De Postman\",\n  \"specialty\": \"Especialidad editada desde la colección.\",\n  \"photo\": \"PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPjwvc3ZnPg==\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/barbers/{{barberoNuevoId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "barbers",
+                "{{barberoNuevoId}}"
+              ]
+            },
+            "description": "El formato se decide por los bytes, no por lo que diga el cliente. Un SVG es texto que puede llevar un script: no se acepta."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400 Bad Request', () => pm.response.to.have.status(400));",
+                  "",
+                  "pm.test('explica que no es una imagen', () => {",
+                  "    pm.expect(pm.response.json().error.details[0].issue).to.include('JPEG ni PNG');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "46. Dar acceso al panel (admin)",
           "request": {
             "method": "PUT",
             "header": [
@@ -2041,7 +2323,7 @@
           "response": []
         },
         {
-          "name": "41. Iniciar sesión con la cuenta nueva",
+          "name": "47. Iniciar sesión con la cuenta nueva",
           "request": {
             "method": "POST",
             "header": [
@@ -2088,7 +2370,7 @@
           "response": []
         },
         {
-          "name": "42. Dar acceso con el usuario del admin (409)",
+          "name": "48. Dar acceso con el usuario del admin (409)",
           "request": {
             "method": "PUT",
             "header": [
@@ -2137,7 +2419,7 @@
           "response": []
         },
         {
-          "name": "43. Listar cuentas (admin)",
+          "name": "49. Listar cuentas (admin)",
           "request": {
             "method": "GET",
             "header": [
@@ -2184,7 +2466,7 @@
           "response": []
         },
         {
-          "name": "44. Quitar el acceso (admin)",
+          "name": "50. Quitar el acceso (admin)",
           "request": {
             "method": "DELETE",
             "header": [
@@ -2222,7 +2504,7 @@
           "response": []
         },
         {
-          "name": "45. Dar de baja barbero (admin)",
+          "name": "51. Dar de baja barbero (admin)",
           "request": {
             "method": "DELETE",
             "header": [
@@ -2259,7 +2541,7 @@
           "response": []
         },
         {
-          "name": "46. Barbero dado de baja ya no existe (404)",
+          "name": "52. Barbero dado de baja ya no existe (404)",
           "request": {
             "method": "GET",
             "header": [],

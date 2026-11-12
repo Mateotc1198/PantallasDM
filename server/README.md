@@ -232,6 +232,8 @@ Todos bajo `/api/v1`.
 | 21 | `PUT` | `/barbers/:id/account` | **admin** | Dar o cambiar el acceso al panel |
 | 22 | `DELETE` | `/barbers/:id/account` | **admin** | Quitar el acceso al panel |
 | 23 | `GET` | `/users` | **admin** | Cuentas de acceso existentes |
+| 24 | `GET` | `/barbers/:id/photo` | público | La foto subida de un barbero (imagen, no JSON) |
+| 25 | `PUT` | `/bookings/:id/status` | **admin · barbero** | Marcar una cita como atendida o "no vino" |
 
 Fuera del contrato de negocio: `GET /health`, sonda de infraestructura.
 
@@ -240,7 +242,7 @@ Fuera del contrato de negocio: `GET /health`, sonda de infraestructura.
 | Rol | Puede |
 | --- | --- |
 | Público (sin cuenta) | Ver barberos y disponibilidad, **reservar**, consultar su cita por el id |
-| `barbero` | Todo lo anterior, más ver y cancelar **sus propias** citas |
+| `barbero` | Todo lo anterior, más ver, cancelar y marcar como atendidas **sus propias** citas |
 | `admin` | Todo lo anterior, sobre **todas** las citas. Además gestiona el catálogo de servicios, la plantilla de barberos y sus cuentas de acceso |
 
 Reservar es público a propósito: el cliente no necesita cuenta, igual que en el
@@ -265,6 +267,7 @@ petición para que un filtro de interfaz deje de proteger nada.
 | `GET /bookings` | `200` | `400` `401` `403` `500` |
 | `GET /bookings/:id` | `200` | `400` `404` `500` |
 | `DELETE /bookings/:id` | `204` | `400` `401` `403` `404` `409` `500` |
+| `PUT /bookings/:id/status` | `200` | `400` `401` `403` `404` `409` `422` `500` |
 | `POST /bookings/:id/cancel` | `204` | `400` `403` `404` `409` `422` `429` `500` |
 | `POST /bookings/:id/reschedule` | `200` | `400` `403` `404` `409` `422` `429` `500` |
 | `GET /services` | `200` | `500` |
@@ -272,8 +275,9 @@ petición para que un filtro de interfaz deje de proteger nada.
 | `POST /services` | `201` + `Location` | `400` `401` `403` `409` `500` |
 | `PUT /services/:id` | `200` | `400` `401` `403` `404` `409` `500` |
 | `DELETE /services/:id` | `204` | `400` `401` `403` `404` `500` |
-| `POST /barbers` | `201` + `Location` | `400` `401` `403` `409` `500` |
-| `PUT /barbers/:id` | `200` | `400` `401` `403` `404` `409` `500` |
+| `POST /barbers` | `201` + `Location` | `400` `401` `403` `409` `413` `500` |
+| `PUT /barbers/:id` | `200` | `400` `401` `403` `404` `409` `413` `500` |
+| `GET /barbers/:id/photo` | `200` (imagen) | `404` `500` |
 | `DELETE /barbers/:id` | `204` | `401` `403` `404` `409` `500` |
 | `PUT /barbers/:id/account` | `200` | `400` `401` `403` `404` `409` `500` |
 | `DELETE /barbers/:id/account` | `204` | `401` `403` `404` `500` |
@@ -304,11 +308,31 @@ A diferencia de los horarios, el seed **no sobrescribe** el catálogo en cada
 arranque. Solo siembra si la tabla está vacía, porque aquí sí manda el
 administrador: sería absurdo que un despliegue le deshiciera los precios.
 
+### La foto de los barberos
+
+La app sube la foto en base64 dentro del mismo `POST` o `PUT` del barbero, en
+el campo `photo`. Antes de enviarla la recorta en cuadrado y la reduce a 512 px,
+así que pesa unos 50 KB.
+
+| Decisión | Por qué |
+| --- | --- |
+| Se guarda en la base (`barber_photos`), no en disco | En la nube cada despliegue arranca con el disco limpio. Un servicio externo como Cloudinary añadiría una cuenta y unas claves; para un puñado de fotos de 50 KB no compensa. |
+| Tabla aparte, no columna de `barbers` | Listar barberos no arrastra los bytes de todas las fotos. |
+| El formato se lee de los **bytes**, no del cliente | Solo se aceptan JPEG y PNG, reconocidos por su firma. Un SVG es texto que puede llevar un script y no entra, aunque llegue en base64 válido. |
+| Máximo 300 KB, comprobado dos veces | En el servidor tras decodificar, y en la base con un `CHECK`. |
+| El cuerpo grande se lee **después** de comprobar la sesión | Esas dos rutas admiten 450 KB; el resto de la API sigue en 10 KB. Si se leyera antes, cualquiera sin sesión podría hacer que el servidor procesara 450 KB para responderle 401. |
+| La URL de la foto lleva `?v=` y caché de un año | La URL cambia en cada subida, así que el teléfono nunca enseña la foto vieja. |
+| El dominio del avatar sale de la petición | La misma respuesta funciona en local, en la red de casa y en producción sin configurar nada. |
+
+Editar sin `photo` ni `avatar` conserva la foto actual. Pasar a una URL externa
+borra la foto subida. Si una versión anterior de la app reenvía la URL de la
+propia foto del barbero, el servidor la reconoce y la conserva.
+
 ### La gestión de barberos
 
 El administrador crea, edita y da de baja barberos. Escribe tres cosas: nombre,
-especialidad y la **URL** de la foto (el servidor no aloja archivos, y la URL
-debe ser `https`). Todo lo demás lo decide el servidor:
+especialidad y la foto, que puede **subir desde la galería** del teléfono o dar
+como una URL `https`. Todo lo demás lo decide el servidor:
 
 - **El id sale del nombre** (`Luis Gómez` → `luis-gomez`) y no cambia nunca,
   aunque el nombre se edite: viaja en URLs y lo referencian las citas. Si ese id
@@ -405,6 +429,33 @@ delante de Colombia, y con su reloj a pelo:
 La conversión usa `Intl`, no un desfase fijo de horas, así que también es
 correcta en zonas con horario de verano. La zona se valida al arrancar: una
 errata detiene el despliegue en vez de reventar en la primera petición.
+
+### Cómo termina una cita
+
+Una cita nace `activa` y acaba de una de tres formas:
+
+| Estado | Quién lo pone | Cuándo |
+| --- | --- | --- |
+| `cancelada` | el cliente o el panel | antes de la cita (el cliente, con el plazo de cambios) |
+| `atendida` | el panel | cuando ya llegó la hora de la cita |
+| `no_asistio` | el panel | cuando ya llegó la hora de la cita |
+
+Se marca con `PUT /bookings/:id/status`. El administrador puede marcar cualquier
+cita; el barbero, solo las suyas (`403` si no). El cliente no: diría siempre que
+vino.
+
+- **Antes de la hora, `422 BOOKING_NOT_STARTED`.** Todavía no se sabe cómo termina,
+  y cerrarla liberaría una franja que sigue siendo de alguien.
+- **Una cancelada no se marca** (`409`).
+- **Se puede corregir** entre `atendida` y `no_asistio`, pero no volver a
+  `activa`: reabriría una franja que ya pasó.
+- **Una cita cerrada ya no se cancela ni se aplaza** (`409 BOOKING_ALREADY_CLOSED`),
+  ni desde el panel ni por el cliente: borraría lo que ocurrió de verdad.
+
+La agenda muestra las activas, las atendidas y las no asistidas; las canceladas
+no, porque ya no ocupan ese hueco. El tipo `booking_status` se amplía con
+`ALTER TYPE ... ADD VALUE IF NOT EXISTS`, así que las bases existentes se
+actualizan solas en el siguiente despliegue.
 
 ### El plazo de cambios
 
@@ -550,7 +601,7 @@ La colección se ejecuta entera de corrido con el Collection Runner:
   peticiones siguientes lo reutilizan: no hay que copiar ids a mano.
 - El login **guarda el token** en una variable y las peticiones protegidas lo
   usan como `Bearer`. Tampoco hay que copiar tokens a mano.
-- Las 46 peticiones llevan tests que verifican código HTTP y forma de respuesta.
+- Las 52 peticiones llevan tests que verifican código HTTP y forma de respuesta.
 
 El environment se versiona con las **contraseñas vacías**: una contraseña
 commiteada es una contraseña publicada. Rellena `adminPassword` y
@@ -574,7 +625,7 @@ npm test
 
 - **Unitarios** (`tests/unit/`): la lógica pura de horarios y de identificadores.
   Sin base de datos.
-- **Integración** (`tests/integration/`): los 23 endpoints contra PostgreSQL real
+- **Integración** (`tests/integration/`): los 25 endpoints contra PostgreSQL real
   con supertest.
 
 Corren contra `pantallasdm_test`, una base distinta de la de desarrollo: los
@@ -592,7 +643,7 @@ tests vacían tablas y hacerlo sobre datos reales sería inaceptable.
 | CORS abierto | Lista blanca por variable de entorno. Sin orígenes configurados no se permite ninguno, en vez de abrir a `*`. |
 | Fuga de información | El `500` nunca devuelve stack ni mensajes de Postgres: se quedan en el log del servidor. |
 | Spam de reservas | `express-rate-limit` en `POST /bookings`: 10 por minuto. |
-| Payload gigante | `express.json({ limit: '10kb' })` |
+| Payload gigante | `express.json({ limit: '10kb' })`. Solo las dos rutas que reciben la foto admiten 450 KB, y lo leen después de comprobar que quien llama es administrador. |
 
 ### Autenticación
 

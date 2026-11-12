@@ -26,12 +26,18 @@ export const ERROR_CODES = {
   BARBER_CLOSED_THAT_DAY: 'BARBER_CLOSED_THAT_DAY',
   /** 409 - ya hay un barbero con ese nombre. */
   BARBER_NAME_TAKEN: 'BARBER_NAME_TAKEN',
+  /** 404 - ese barbero no tiene una foto subida. */
+  BARBER_PHOTO_NOT_FOUND: 'BARBER_PHOTO_NOT_FOUND',
   /** 409 - tiene citas activas pendientes y no se puede dar de baja. */
   BARBER_HAS_BOOKINGS: 'BARBER_HAS_BOOKINGS',
 
   BOOKING_NOT_FOUND: 'BOOKING_NOT_FOUND',
   BOOKING_SLOT_TAKEN: 'BOOKING_SLOT_TAKEN',
   BOOKING_ALREADY_CANCELLED: 'BOOKING_ALREADY_CANCELLED',
+  /** 409 - la cita ya se marcó como atendida o no asistida: está cerrada. */
+  BOOKING_ALREADY_CLOSED: 'BOOKING_ALREADY_CLOSED',
+  /** 422 - todavía no es la hora de la cita: no se puede decir cómo terminó. */
+  BOOKING_NOT_STARTED: 'BOOKING_NOT_STARTED',
   /** 422 - la cita está demasiado cerca para tocarla. */
   BOOKING_CHANGE_TOO_LATE: 'BOOKING_CHANGE_TOO_LATE',
   /** 403 - el teléfono no corresponde al de la cita. */

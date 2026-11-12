@@ -292,8 +292,21 @@ describe('ErrorState', () => {
 });
 
 describe('BookingRow', () => {
+  /** La fila con lo mínimo; cada test cambia solo lo que prueba. */
+  function fila(props: Partial<Parameters<typeof BookingRow>[0]> = {}) {
+    return (
+      <BookingRow
+        booking={cita}
+        started={false}
+        onCancel={jest.fn()}
+        onOutcome={jest.fn()}
+        {...props}
+      />
+    );
+  }
+
   it('muestra hora en formato de 12 horas, cliente, barbero y teléfono', async () => {
-    await renderApp(<BookingRow booking={cita} barberName="Luis Gomez" onCancel={jest.fn()} />);
+    await renderApp(fila({ barberName: 'Luis Gomez' }));
 
     // La hora va partida: el número grande y el periodo pequeño.
     expect(screen.getByText('9:00')).toBeOnTheScreen();
@@ -304,26 +317,26 @@ describe('BookingRow', () => {
   });
 
   it('dice qué servicio es y cuánto cuesta', async () => {
-    await renderApp(<BookingRow booking={cita} onCancel={jest.fn()} />);
+    await renderApp(fila());
 
     expect(screen.getByText(/Fade · .*30\.000/)).toBeOnTheScreen();
   });
 
   it('una cita sin servicio lo dice en vez de dejar el hueco', async () => {
-    await renderApp(<BookingRow booking={{ ...cita, service: null }} onCancel={jest.fn()} />);
+    await renderApp(fila({ booking: { ...cita, service: null } }));
 
     expect(screen.getByText('Sin servicio indicado')).toBeOnTheScreen();
   });
 
   it('sin nombre de barbero no pinta esa línea: en su agenda todas son suyas', async () => {
-    await renderApp(<BookingRow booking={cita} onCancel={jest.fn()} />);
+    await renderApp(fila());
 
     expect(screen.queryByText('Luis Gomez')).not.toBeOnTheScreen();
   });
 
   it('permite escribirle al cliente por WhatsApp, con el indicativo del país', async () => {
     const abrir = jest.spyOn(Linking, 'openURL').mockResolvedValue(undefined);
-    await renderApp(<BookingRow booking={cita} onCancel={jest.fn()} />);
+    await renderApp(fila());
 
     await userEvent
       .setup()
@@ -332,23 +345,94 @@ describe('BookingRow', () => {
     expect(abrir).toHaveBeenCalledWith(expect.stringMatching(/^https:\/\/wa\.me\/573000000000\?text=/));
   });
 
-  it('cancelar devuelve la cita entera, no solo el id', async () => {
-    const alCancelar = jest.fn();
-    await renderApp(<BookingRow booking={cita} barberName="Luis Gomez" onCancel={alCancelar} />);
+  describe('antes de la hora de la cita', () => {
+    it('ofrece cancelar, y cancelar devuelve la cita entera', async () => {
+      const alCancelar = jest.fn();
+      await renderApp(fila({ onCancel: alCancelar }));
 
-    await userEvent
-      .setup()
-      .press(screen.getByRole('button', { name: 'Cancelar la cita de Cliente Prueba a las 9:00 am' }));
+      await userEvent
+        .setup()
+        .press(screen.getByRole('button', { name: 'Cancelar la cita de Cliente Prueba a las 9:00 am' }));
 
-    expect(alCancelar).toHaveBeenCalledWith(cita);
+      expect(alCancelar).toHaveBeenCalledWith(cita);
+    });
+
+    it('no ofrece marcarla: todavía no se sabe cómo termina', async () => {
+      await renderApp(fila());
+
+      expect(screen.queryByRole('button', { name: /Marcar/ })).not.toBeOnTheScreen();
+    });
   });
 
-  it('mientras se cancela desaparece el botón: no hay segundo toque posible', async () => {
-    await renderApp(
-      <BookingRow booking={cita} barberName="Luis Gomez" onCancel={jest.fn()} cancelling />,
-    );
+  describe('desde la hora de la cita', () => {
+    it('ofrece marcar si vino o no, en vez de cancelar', async () => {
+      await renderApp(fila({ started: true }));
 
+      expect(screen.getByRole('button', { name: 'Marcar atendida la cita de Cliente Prueba' })).toBeOnTheScreen();
+      expect(screen.getByRole('button', { name: 'Marcar que Cliente Prueba no vino' })).toBeOnTheScreen();
+      expect(screen.queryByRole('button', { name: /Cancelar la cita/ })).not.toBeOnTheScreen();
+    });
+
+    it('si nadie la ha marcado lo avisa', async () => {
+      await renderApp(fila({ started: true }));
+
+      expect(screen.getByText('Sin marcar')).toBeOnTheScreen();
+    });
+
+    it('cada botón avisa con la cita y el estado', async () => {
+      const alMarcar = jest.fn();
+      await renderApp(fila({ started: true, onOutcome: alMarcar }));
+      const usuario = userEvent.setup();
+
+      await usuario.press(screen.getByRole('button', { name: 'Marcar atendida la cita de Cliente Prueba' }));
+      await usuario.press(screen.getByRole('button', { name: 'Marcar que Cliente Prueba no vino' }));
+
+      expect(alMarcar).toHaveBeenNthCalledWith(1, cita, 'atendida');
+      expect(alMarcar).toHaveBeenNthCalledWith(2, cita, 'no_asistio');
+    });
+
+    it('una atendida lo dice, y su botón queda marcado y sin efecto', async () => {
+      const alMarcar = jest.fn();
+      await renderApp(
+        fila({ started: true, booking: { ...cita, status: 'atendida' }, onOutcome: alMarcar }),
+      );
+
+      const boton = screen.getByRole('button', { name: 'Marcar atendida la cita de Cliente Prueba' });
+      expect(screen.getByText('Atendida')).toBeOnTheScreen();
+      expect(screen.queryByText('Sin marcar')).not.toBeOnTheScreen();
+      expect(boton).toBeSelected();
+      await userEvent.setup().press(boton);
+      expect(alMarcar).not.toHaveBeenCalled();
+    });
+
+    it('una marcada se puede corregir con el otro botón', async () => {
+      const alMarcar = jest.fn();
+      await renderApp(
+        fila({ started: true, booking: { ...cita, status: 'atendida' }, onOutcome: alMarcar }),
+      );
+
+      await userEvent
+        .setup()
+        .press(screen.getByRole('button', { name: 'Marcar que Cliente Prueba no vino' }));
+
+      expect(alMarcar).toHaveBeenCalledWith(expect.objectContaining({ id: cita.id }), 'no_asistio');
+    });
+
+    it('una no asistida lo dice', async () => {
+      await renderApp(fila({ started: true, booking: { ...cita, status: 'no_asistio' } }));
+
+      expect(screen.getByText('No vino')).toBeOnTheScreen();
+    });
+  });
+
+  it('con una acción en curso no deja otro toque: ni cancelar ni marcar', async () => {
+    await renderApp(fila({ busy: true }));
     expect(screen.queryByRole('button', { name: /Cancelar la cita/ })).not.toBeOnTheScreen();
+  });
+
+  it('con una acción en curso tampoco deja marcar', async () => {
+    await renderApp(fila({ busy: true, started: true }));
+    expect(screen.queryByRole('button', { name: /Marcar/ })).not.toBeOnTheScreen();
   });
 });
 

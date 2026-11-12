@@ -1,24 +1,49 @@
 import { Fragment, useMemo, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text } from 'react-native';
 
 import { Avatar } from '../../src/components/Avatar';
 import { BarberAccessForm } from '../../src/components/BarberAccessForm';
 import { CrudRow } from '../../src/components/CrudRow';
 import { CrudScreen } from '../../src/components/CrudScreen';
 import { FormField } from '../../src/components/FormField';
+import { PhotoField } from '../../src/components/PhotoField';
 import { useAuth } from '../../src/context/AuthContext';
 import { createBarber, deleteBarber, getBarbers, updateBarber } from '../../src/data/barbers';
 import { getUsers, removeBarberAccount, setBarberAccount } from '../../src/data/users';
 import { useAsync } from '../../src/hooks/useAsync';
 import { useCrudForm } from '../../src/hooks/useCrudForm';
-import { spacing, typography, type Palette } from '../../src/theme/tokens';
+import type { FotoElegida } from '../../src/media/photoPicker';
+import { typography, type Palette } from '../../src/theme/tokens';
 import { useThemedStyles } from '../../src/theme/useThemedStyles';
 import type { BarberInput, BarberSummary } from '../../src/types/api';
 
-/** Los tres datos que el administrador escribe. El resto lo pone el servidor. */
-type Formulario = BarberInput;
+/**
+ * Lo que hay en el formulario.
+ *
+ * La foto puede venir por dos caminos, y el último que se usa gana: elegir de
+ * la galería vacía la URL, y escribir una URL descarta la foto elegida.
+ */
+interface Formulario {
+  name: string;
+  specialty: string;
+  /** URL nueva escrita a mano. Vacía = no se cambia por URL. */
+  avatar: string;
+  /** Foto nueva de la galería, pendiente de subir. */
+  foto: FotoElegida | null;
+  /**
+   * La foto que el barbero ya tiene, solo para enseñarla. Nunca se reenvía:
+   * si no se elige otra, el servidor conserva la suya.
+   */
+  fotoActual: string | null;
+}
 
-const FORMULARIO_VACIO: Formulario = { name: '', specialty: '', avatar: '' };
+const FORMULARIO_VACIO: Formulario = {
+  name: '',
+  specialty: '',
+  avatar: '',
+  foto: null,
+  fotoActual: null,
+};
 
 const TEXTOS = {
   titulo: 'Barberos',
@@ -37,7 +62,26 @@ const URL_HTTPS = /^https:\/\/\S+$/i;
 const TAMANO_FOTO = 48;
 
 function aFormulario(barbero: BarberSummary): Formulario {
-  return { name: barbero.name, specialty: barbero.specialty, avatar: barbero.avatar };
+  return {
+    name: barbero.name,
+    specialty: barbero.specialty,
+    // El campo de URL empieza vacío: es para poner una NUEVA. Si se llenara
+    // con la actual, guardar sin tocar nada la mandaría de vuelta.
+    avatar: '',
+    foto: null,
+    fotoActual: barbero.avatar,
+  };
+}
+
+/** Lo que se enseña en el círculo de la foto: lo último que se eligió. */
+function vistaPreviaDe(form: Formulario): string | null {
+  if (form.foto !== null) {
+    return form.foto.uri;
+  }
+  const url = form.avatar.trim();
+  // Solo una URL bien formada: no se intenta descargar media dirección a
+  // medio teclear.
+  return URL_HTTPS.test(url) ? url : form.fotoActual;
 }
 
 /**
@@ -51,18 +95,31 @@ function validar(form: Formulario): string | null {
   if (form.specialty.trim().length < 3) {
     return 'La especialidad debe tener al menos 3 caracteres.';
   }
-  if (!URL_HTTPS.test(form.avatar.trim())) {
-    return 'La foto debe ser una URL que empiece por https://';
+  const url = form.avatar.trim();
+  if (url.length > 0 && !URL_HTTPS.test(url)) {
+    return 'La URL de la foto debe empezar por https://';
+  }
+  if (form.foto === null && url.length === 0 && form.fotoActual === null) {
+    return 'Elige una foto de la galería o pega su URL.';
   }
   return null;
 }
 
+/**
+ * Lo que viaja a la API. De la foto va como mucho una cosa: la de la galería,
+ * la URL nueva, o nada, y entonces el servidor conserva la que había.
+ */
 function aEntrada(form: Formulario): BarberInput {
-  return {
-    name: form.name.trim(),
-    specialty: form.specialty.trim(),
-    avatar: form.avatar.trim(),
-  };
+  const datos = { name: form.name.trim(), specialty: form.specialty.trim() };
+  const url = form.avatar.trim();
+
+  if (form.foto !== null) {
+    return { ...datos, photo: form.foto.base64 };
+  }
+  if (url.length > 0) {
+    return { ...datos, avatar: url };
+  }
+  return datos;
 }
 
 /**
@@ -126,7 +183,6 @@ export default function AdminBarberosScreen() {
   const { form, setForm } = crud;
   const editable = !crud.guardando;
   const lista = barberos.data ?? [];
-  const fotoValida = URL_HTTPS.test(form.avatar.trim());
 
   return (
     <CrudScreen
@@ -151,27 +207,31 @@ export default function AdminBarberosScreen() {
             editable={editable}
             multilinea
           />
+          <PhotoField
+            vistaPrevia={vistaPreviaDe(form)}
+            hayFotoNueva={form.foto !== null}
+            tieneFotoActual={form.fotoActual !== null}
+            editable={editable}
+            // Con función: la galería tarda, y lo escrito mientras tanto no
+            // se pierde.
+            onElegida={(foto) => setForm((actual) => ({ ...actual, foto, avatar: '' }))}
+          />
           <FormField
-            etiqueta="Foto"
+            etiqueta="O pega la URL de una foto"
             valor={form.avatar}
-            onChange={(avatar) => setForm({ ...form, avatar })}
+            onChange={(avatar) =>
+              setForm((actual) => ({
+                ...actual,
+                avatar,
+                // Escribir una URL descarta la foto de la galería elegida.
+                foto: avatar.trim().length > 0 ? null : actual.foto,
+              }))
+            }
             editable={editable}
             teclado="url"
             textoLibre={false}
-            ayuda="URL que empiece por https://. El servidor no aloja archivos."
+            ayuda="Opcional. Debe empezar por https://"
           />
-
-          {/*
-            La vista previa aparece solo con una dirección bien formada: así
-            el administrador comprueba que la foto es la que quiere antes de
-            guardar, y no se intenta descargar media URL a medio teclear.
-          */}
-          {fotoValida ? (
-            <View style={styles.vistaPrevia}>
-              <Avatar uri={form.avatar.trim()} size={TAMANO_FOTO} />
-              <Text style={styles.vistaPreviaTexto}>Así se verá la foto.</Text>
-            </View>
-          ) : null}
 
           {crud.editando === null ? (
             <Text style={styles.nota}>
@@ -229,15 +289,6 @@ export default function AdminBarberosScreen() {
 }
 
 const makeStyles = (colors: Palette) => StyleSheet.create({
-  vistaPrevia: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
-  vistaPreviaTexto: {
-    ...typography.meta,
-    color: colors.textSecondary,
-  },
   nota: {
     ...typography.meta,
     color: colors.textMuted,
