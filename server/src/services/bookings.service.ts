@@ -7,7 +7,7 @@ import {
 import { ERROR_CODES } from '../errors/codes.js';
 import * as bookingsRepository from '../repositories/bookings.repository.js';
 import * as schedulesRepository from '../repositories/schedules.repository.js';
-import type { AuthUser, Booking, CreateBookingInput } from '../types/api.js';
+import type { AuthUser, Booking, BookingOutcome, CreateBookingInput } from '../types/api.js';
 import { env } from '../config/env.js';
 import { currentMinutes, minutesUntilBooking, today } from '../utils/clock.js';
 import { isSlotBoundary, toMinutes, weekdayOf } from '../utils/time.js';
@@ -159,18 +159,83 @@ export async function getById(id: string): Promise<Booking> {
  * Se consulta primero para poder distinguir dos situaciones que el UPDATE
  * confunde: la cita no existe (404) o existe pero ya estaba cancelada (409).
  */
+/**
+ * Solo una cita activa se puede cancelar o aplazar.
+ *
+ * Una cancelada ya no existe para nadie, y una atendida o no asistida ya
+ * pasó: cancelarla después borraría lo que ocurrió de verdad. Cada caso con
+ * su código, porque el mensaje que necesita leer cada uno es distinto.
+ */
+function assertSigueActiva(booking: Booking): void {
+  if (booking.status === 'cancelada') {
+    throw new ConflictError(ERROR_CODES.BOOKING_ALREADY_CANCELLED, 'Esa cita ya estaba cancelada.');
+  }
+  if (booking.status !== 'activa') {
+    throw new ConflictError(
+      ERROR_CODES.BOOKING_ALREADY_CLOSED,
+      'Esa cita ya pasó y quedó cerrada: no se puede cambiar.',
+    );
+  }
+}
+
+/**
+ * Un UPDATE condicionado al estado no tocó nada: otra petición cambió la cita
+ * entre la lectura y la escritura. Se vuelve a leer para decir qué pasó.
+ */
+async function fallarSegunEstadoActual(id: string): Promise<never> {
+  assertSigueActiva(await getById(id));
+  // Si siguiera activa, el UPDATE no tenía por qué fallar: es un fallo
+  // nuestro, no de la petición, y se trata como tal (500).
+  throw new Error(`La cita ${id} sigue activa, pero no se pudo actualizar.`);
+}
+
 export async function cancel(id: string, user: AuthUser): Promise<void> {
   const booking = await getById(id);
   assertPuedeGestionar(booking, user);
+  assertSigueActiva(booking);
 
   const cancelled = await bookingsRepository.cancel(id);
 
   if (cancelled === null) {
+    await fallarSegunEstadoActual(id);
+  }
+}
+
+/**
+ * Marca cómo terminó una cita: atendida, o el cliente no vino.
+ *
+ * Reglas de negocio:
+ * - Lo hace el panel: el administrador en cualquier cita, el barbero en las
+ *   suyas. El cliente no, que diría siempre que vino.
+ * - Solo cuando ya llegó la hora de la cita. Antes no se sabe cómo termina,
+ *   y marcarla cerrada liberaría una franja que todavía es de alguien.
+ * - Una cancelada no se marca. Una ya marcada sí, para corregir un error.
+ */
+export async function setOutcome(
+  id: string,
+  outcome: BookingOutcome,
+  user: AuthUser,
+): Promise<Booking> {
+  const booking = await getById(id);
+  assertPuedeGestionar(booking, user);
+
+  if (booking.status === 'cancelada') {
     throw new ConflictError(
       ERROR_CODES.BOOKING_ALREADY_CANCELLED,
-      'Esa cita ya estaba cancelada.',
+      'Una cita cancelada no se puede marcar como atendida ni como no asistida.',
     );
   }
+
+  if (minutesUntilBooking(booking.date, booking.time) > 0) {
+    throw new UnprocessableError(
+      ERROR_CODES.BOOKING_NOT_STARTED,
+      'Todavía no es la hora de esta cita: se podrá marcar cuando empiece.',
+      [{ field: 'status', issue: 'la cita no ha empezado' }],
+    );
+  }
+
+  const actualizada = await bookingsRepository.setOutcome(id, outcome);
+  return actualizada ?? fallarSegunEstadoActual(id);
 }
 
 /**
@@ -214,18 +279,16 @@ function assertDentroDelPlazo(booking: Booking): void {
 export async function cancelByCustomer(id: string, customerPhone: string): Promise<void> {
   const booking = await getById(id);
 
-  // El teléfono se comprueba antes que el plazo: si no es tu cita, no tienes
-  // por qué enterarte de a qué hora es.
+  // El teléfono se comprueba antes que nada: si no es tu cita, no tienes por
+  // qué enterarte de en qué estado está ni de a qué hora es.
   assertEsSuCita(booking, customerPhone);
+  assertSigueActiva(booking);
   assertDentroDelPlazo(booking);
 
   const cancelled = await bookingsRepository.cancel(id);
 
   if (cancelled === null) {
-    throw new ConflictError(
-      ERROR_CODES.BOOKING_ALREADY_CANCELLED,
-      'Esa cita ya estaba cancelada.',
-    );
+    await fallarSegunEstadoActual(id);
   }
 }
 
@@ -248,16 +311,14 @@ export async function rescheduleByCustomer(
   const booking = await getById(id);
 
   assertEsSuCita(booking, customerPhone);
+  assertSigueActiva(booking);
   assertDentroDelPlazo(booking);
   await assertReservable({ barberId: booking.barberId, date, time });
 
   const result = await bookingsRepository.reschedule(id, date, time);
 
   if (result === null) {
-    throw new ConflictError(
-      ERROR_CODES.BOOKING_ALREADY_CANCELLED,
-      'Esa cita ya estaba cancelada.',
-    );
+    return fallarSegunEstadoActual(id);
   }
 
   if (!result.ok) {

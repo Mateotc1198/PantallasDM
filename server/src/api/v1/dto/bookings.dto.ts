@@ -52,6 +52,19 @@ export const agendaQuerySchema = z.object({
   barberId: z.string().min(1).max(100).optional(),
 });
 
+/**
+ * Cuerpo de PUT /bookings/:id/status.
+ *
+ * Solo los dos estados de cierre. "activa" no, porque deshacer el cierre
+ * reabriría una franja que ya pasó; "cancelada" no, porque cancelar tiene su
+ * propia ruta y sus propias reglas.
+ */
+export const bookingOutcomeSchema = z.object({
+  status: z.enum(['atendida', 'no_asistio'], {
+    message: 'el estado debe ser "atendida" o "no_asistio"',
+  }),
+});
+
 export const bookingIdParamsSchema = z.object({
   id: z.uuid('el id de la cita debe ser un UUID'),
 });

@@ -19,10 +19,20 @@ BEGIN;
 DO $$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'booking_status') THEN
-    CREATE TYPE booking_status AS ENUM ('activa', 'cancelada');
+    CREATE TYPE booking_status AS ENUM ('activa', 'cancelada', 'atendida', 'no_asistio');
   END IF;
 END
 $$;
+
+-- Como termino una cita a la que nadie cancelo: el barbero la atendio, o el
+-- cliente no vino. Las bases que ya existian tienen el tipo con dos valores y
+-- no pasan por el CREATE TYPE de arriba, de ahi estos ALTER idempotentes.
+--
+-- ADD VALUE dentro de una transaccion es valido desde PostgreSQL 12. Lo unico
+-- que no se puede es usar el valor nuevo antes del COMMIT, y este archivo no
+-- lo usa.
+ALTER TYPE booking_status ADD VALUE IF NOT EXISTS 'atendida';
+ALTER TYPE booking_status ADD VALUE IF NOT EXISTS 'no_asistio';
 
 -- ---------------------------------------------------------------------------
 -- barbers
