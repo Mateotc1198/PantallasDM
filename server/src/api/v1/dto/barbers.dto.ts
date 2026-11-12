@@ -35,7 +35,16 @@ export const monthQuerySchema = z.object({
  * seguridad: sin fijar el protocolo, z.url() aceptaría también `javascript:`
  * o `data:`, que no son direcciones de una imagen.
  */
-export const barberInputSchema = z.object({
+/**
+ * Largo máximo del base64 de una foto.
+ *
+ * Base64 ocupa cuatro caracteres por cada tres bytes, así que 300 KB de
+ * imagen son 400.000 caracteres. El tamaño real se vuelve a comprobar tras
+ * decodificar; este tope solo evita ponerse a decodificar algo absurdo.
+ */
+const MAX_PHOTO_BASE64_LENGTH = 409_600;
+
+const barberFields = {
   name: z
     .string()
     .trim()
@@ -48,8 +57,36 @@ export const barberInputSchema = z.object({
     .max(120, 'la especialidad no puede superar 120 caracteres'),
   avatar: z
     .url({ protocol: /^https$/, error: 'la foto debe ser una URL que empiece por https://' })
-    .max(500, 'la URL de la foto no puede superar 500 caracteres'),
-});
+    .max(500, 'la URL de la foto no puede superar 500 caracteres')
+    .optional(),
+  // Aquí solo se acota el tamaño del texto. Que sea base64 de verdad y una
+  // imagen de verdad lo decide el servicio, mirando los bytes.
+  photo: z
+    .string()
+    .min(1, 'la foto no puede estar vacía')
+    .max(MAX_PHOTO_BASE64_LENGTH, 'la foto es demasiado grande')
+    .optional(),
+};
+
+const UNA_SOLA_FOTO = {
+  message: 'manda la foto o la URL, no las dos',
+  path: ['photo'],
+};
+
+/**
+ * PUT /barbers/:id — la foto es opcional: sin ella se conserva la actual.
+ */
+export const barberUpdateSchema = z
+  .object(barberFields)
+  .refine((datos) => datos.avatar === undefined || datos.photo === undefined, UNA_SOLA_FOTO);
+
+/**
+ * POST /barbers — un barbero nuevo necesita foto, subida o por URL.
+ */
+export const barberInputSchema = barberUpdateSchema.refine(
+  (datos) => datos.avatar !== undefined || datos.photo !== undefined,
+  { message: 'un barbero nuevo necesita una foto', path: ['photo'] },
+);
 
 export type BarberIdParams = z.infer<typeof barberIdParamsSchema>;
 export type BarberInputBody = z.infer<typeof barberInputSchema>;

@@ -1973,7 +1973,146 @@
           "response": []
         },
         {
-          "name": "40. Dar acceso al panel (admin)",
+          "name": "40. Subir foto desde la galería (admin)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenAdmin}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Barbero De Postman\",\n  \"specialty\": \"Especialidad editada desde la colección.\",\n  \"photo\": \"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/barbers/{{barberoNuevoId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "barbers",
+                "{{barberoNuevoId}}"
+              ]
+            },
+            "description": "La app manda la foto de la galería en base64 (JPEG o PNG, hasta 300 KB). El servidor la guarda y el avatar pasa a ser una URL de esta API. Aquí va un PNG de 1x1 píxel."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "",
+                  "pm.test('el avatar apunta a la foto guardada en la API', () => {",
+                  "    pm.expect(pm.response.json().avatar).to.match(/\\/api\\/v1\\/barbers\\/.+\\/photo\\?v=\\d+$/);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "41. Ver la foto del barbero",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/barbers/{{barberoNuevoId}}/photo",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "barbers",
+                "{{barberoNuevoId}}",
+                "photo"
+              ]
+            },
+            "description": "Pública, como la ficha. Devuelve la imagen, no JSON, con el tipo detectado de los bytes y caché larga: la URL cambia en cada subida."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "",
+                  "pm.test('es una imagen PNG, no JSON', () => {",
+                  "    pm.expect(pm.response.headers.get('Content-Type')).to.eql('image/png');",
+                  "});",
+                  "",
+                  "pm.test('el navegador no puede reinterpretarla como otra cosa', () => {",
+                  "    pm.expect(pm.response.headers.get('X-Content-Type-Options')).to.eql('nosniff');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "42. Subir algo que no es una imagen (400)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenAdmin}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Barbero De Postman\",\n  \"specialty\": \"Especialidad editada desde la colección.\",\n  \"photo\": \"PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPjwvc3ZnPg==\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/barbers/{{barberoNuevoId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "barbers",
+                "{{barberoNuevoId}}"
+              ]
+            },
+            "description": "El formato se decide por los bytes, no por lo que diga el cliente. Un SVG es texto que puede llevar un script: no se acepta."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400 Bad Request', () => pm.response.to.have.status(400));",
+                  "",
+                  "pm.test('explica que no es una imagen', () => {",
+                  "    pm.expect(pm.response.json().error.details[0].issue).to.include('JPEG ni PNG');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "43. Dar acceso al panel (admin)",
           "request": {
             "method": "PUT",
             "header": [
@@ -2041,7 +2180,7 @@
           "response": []
         },
         {
-          "name": "41. Iniciar sesión con la cuenta nueva",
+          "name": "44. Iniciar sesión con la cuenta nueva",
           "request": {
             "method": "POST",
             "header": [
@@ -2088,7 +2227,7 @@
           "response": []
         },
         {
-          "name": "42. Dar acceso con el usuario del admin (409)",
+          "name": "45. Dar acceso con el usuario del admin (409)",
           "request": {
             "method": "PUT",
             "header": [
@@ -2137,7 +2276,7 @@
           "response": []
         },
         {
-          "name": "43. Listar cuentas (admin)",
+          "name": "46. Listar cuentas (admin)",
           "request": {
             "method": "GET",
             "header": [
@@ -2184,7 +2323,7 @@
           "response": []
         },
         {
-          "name": "44. Quitar el acceso (admin)",
+          "name": "47. Quitar el acceso (admin)",
           "request": {
             "method": "DELETE",
             "header": [
@@ -2222,7 +2361,7 @@
           "response": []
         },
         {
-          "name": "45. Dar de baja barbero (admin)",
+          "name": "48. Dar de baja barbero (admin)",
           "request": {
             "method": "DELETE",
             "header": [
@@ -2259,7 +2398,7 @@
           "response": []
         },
         {
-          "name": "46. Barbero dado de baja ya no existe (404)",
+          "name": "49. Barbero dado de baja ya no existe (404)",
           "request": {
             "method": "GET",
             "header": [],
