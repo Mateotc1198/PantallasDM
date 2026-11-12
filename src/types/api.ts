@@ -13,7 +13,10 @@
 export type SlotStatus = 'libre' | 'ocupado';
 
 /** Estado de una cita. */
-export type BookingStatus = 'activa' | 'cancelada';
+export type BookingStatus = 'activa' | 'cancelada' | 'atendida' | 'no_asistio';
+
+/** Cómo terminó una cita que nadie canceló. Lo marca el panel. */
+export type BookingOutcome = 'atendida' | 'no_asistio';
 
 /** Reseña de un cliente sobre un barbero. */
 export interface Review {
